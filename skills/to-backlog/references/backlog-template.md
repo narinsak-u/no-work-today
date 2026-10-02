@@ -8,6 +8,8 @@ Use this file as the complete shape for `docs/backlog.md`. Keep all five status 
 
 **ID rule:** Every item has a stable `BL-###` ID. IDs are never renumbered or reused, including IDs of completed items.
 
+**Section invariant:** Place each item under exactly one heading matching its `Status`. When a status changes, move the complete item block to the matching section before saving.
+
 ## In Progress
 
 <!-- Items with verified active work. -->

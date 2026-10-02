@@ -32,8 +32,9 @@ Create or update one evidence-based onboarding document at `docs/overview.md`. T
 5. Fill every template section with concise, repository-backed guidance. Distinguish observed facts from inferences, cite relevant paths and commands, and mark unknowns instead of filling gaps from convention or intuition.
 6. In `Environment and Configuration`, document variable names, loading locations, safe defaults, and setup requirements without exposing secret values. If a file contains secrets, describe its role without reproducing its contents.
 7. In `Development Workflow`, include only commands supported by repository evidence. State when testing, deployment, or another workflow could not be verified.
-8. Write the result to `docs/overview.md`. Do not modify, rename, or delete unrelated documentation, source files, configuration, or generated artifacts.
-9. Re-read the result and check that it explains flows before inventories, covers all template sections, contains no secret values or unsupported claims, and leaves unrelated files untouched.
+8. Before writing, inspect the owned file's Git state. In a Git repository, run `git status --short -- docs/overview.md`; if it reports staged or unstaged changes, stop and ask how to merge them rather than overwrite them. In a non-Git repository, preserve existing content explicitly while incorporating the new evidence.
+9. Write the result to `docs/overview.md`. Do not modify, rename, or delete unrelated documentation, source files, configuration, or generated artifacts.
+10. Re-read the result and check that it explains flows before inventories, covers all template sections, contains no secret values or unsupported claims, and leaves unrelated files untouched. Confirm the owned-file guard passed before writing.
 
 ## Completion Criteria
 
