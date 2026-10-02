@@ -157,7 +157,7 @@
 
 - [ ] **Step 1: Write README installation and usage.**
 
-  Document all-skills and single-skill commands using `narinsak-u/my-personal-agent-skills`, manual installation fallback, the three `docs/` outputs, optional cross-skill context, and the no-secret rule.
+  Document all-skills and single-skill commands using `narinsak-u/i-need-some-coffee`, manual installation fallback, the three `docs/` outputs, optional cross-skill context, and the no-secret rule.
 
 - [ ] **Step 2: Write the MIT license.**
 
@@ -211,7 +211,7 @@
 
 - [ ] **Step 4: Verify README commands.**
 
-  Confirm the documented repository URL is `narinsak-u/my-personal-agent-skills`, skill names match directory names, and both all-skills and single-skill install commands are present.
+  Confirm the documented repository URL is `narinsak-u/i-need-some-coffee`, skill names match directory names, and both all-skills and single-skill install commands are present.
 
 - [ ] **Step 5: Review the final tree and change set.**
 

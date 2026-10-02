@@ -6,12 +6,12 @@ Proposed after user approval of the three-skill architecture. The generated proj
 
 ## Goal
 
-Publish three portable Agent Skills in `narinsak-u/my-personal-agent-skills` so developers can install all or one skill through the open `SKILL.md` format and use them to maintain lightweight project memory.
+Publish three portable Agent Skills in `narinsak-u/i-need-some-coffee` so developers can install all or one skill through the open `SKILL.md` format and use them to maintain lightweight project memory.
 
 ## Repository Contract
 
 ```text
-my-personal-agent-skills/
+i-need-some-coffee/
 ├── README.md
 ├── LICENSE
 ├── CHANGELOG.md
@@ -105,11 +105,13 @@ Behavior:
 README must document:
 
 ```bash
-npx skills add narinsak-u/my-personal-agent-skills
-npx skills add narinsak-u/my-personal-agent-skills --skill to-recap
+npx skills add narinsak-u/i-need-some-coffee
+npx skills add narinsak-u/i-need-some-coffee --skill to-recap
 ```
 
 It must also include manual installation guidance, the three output paths, the independence guarantee, and the MIT license notice. No custom CLI, build system, or runtime package is required for v1.
+
+The repository's GitHub slug is `i-need-some-coffee`; the skill names remain `to-catchup`, `to-recap`, and `to-backlog`.
 
 ## Verification
 
