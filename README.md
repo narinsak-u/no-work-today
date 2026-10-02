@@ -13,15 +13,15 @@ The skills use the open `SKILL.md` format and do not require a runtime package, 
 The recommended installer is the cross-agent `skills` CLI. Install all three skills from the distribution repository:
 
 ```bash
-npx skills add narinsak-u/i-need-some-coffee
+npx skills add narinsak-u/no-work-today
 ```
 
 Install only one skill when that is all you need:
 
 ```bash
-npx skills add narinsak-u/i-need-some-coffee --skill to-catchup
-npx skills add narinsak-u/i-need-some-coffee --skill to-recap
-npx skills add narinsak-u/i-need-some-coffee --skill to-backlog
+npx skills add narinsak-u/no-work-today --skill to-catchup
+npx skills add narinsak-u/no-work-today --skill to-recap
+npx skills add narinsak-u/no-work-today --skill to-backlog
 ```
 
 Each skill is independently installable. `to-recap` does not require `to-catchup`, and `to-backlog` does not require either of the other skills. When present, a skill may use another generated document as optional, read-only context; cross-skill files are never hard dependencies and a skill never edits another skill's owned file.
@@ -31,8 +31,8 @@ Each skill is independently installable. `to-recap` does not require `to-catchup
 If the CLI is unavailable, clone the repository and copy the skill directory (including its `SKILL.md` and `references/` directory) into the skills directory supported by your agent:
 
 ```bash
-git clone https://github.com/narinsak-u/i-need-some-coffee.git
-cp -R i-need-some-coffee/skills/to-catchup /path/to/your/agent/skills/
+git clone https://github.com/narinsak-u/no-work-today.git
+cp -R no-work-today/skills/to-catchup /path/to/your/agent/skills/
 ```
 
 Replace `to-catchup` with `to-recap` or `to-backlog` for a single skill, or copy all three directories for the complete set. The destination is agent-specific; use the skills directory documented by your agent rather than assuming a universal path.
