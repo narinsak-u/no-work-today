@@ -137,3 +137,30 @@ It also reproduced the required checkpoint shape with `last_commit: def5678` and
 ## Concerns
 
 None. The skill intentionally does not create a sample `docs/recap.md`; its contract is to guide an agent operating in a target project, while this distribution repository contains only the skill and its local template.
+
+## Review-fix evidence
+
+The review identified that the template's category list did not directly represent the approved design categories. I changed both aligned files:
+
+- `recap-template.md` now permits exactly `features`, `fixes`, `refactors`, `infrastructure`, `testing`, `documentation`, `security`, and `performance`.
+- `SKILL.md` now instructs the writer to choose one of those eight template categories for each entry.
+
+Targeted checks after the fix:
+
+```text
+$ Python assertions for all eight categories in SKILL.md and recap-template.md, plus the checkpoint fields
+category contract assertions passed
+
+$ git diff --check -- skills/to-recap/SKILL.md skills/to-recap/references/recap-template.md
+[no output; exit 0]
+```
+
+The fix was committed without unrelated files:
+
+```text
+$ git add skills/to-recap/SKILL.md skills/to-recap/references/recap-template.md && git commit -m "fix: align recap categories with project design"
+[feat/project-memory-skills 7b35c9a] fix: align recap categories with project design
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+```
+
+The original checkpoint/output contract remains unchanged.
