@@ -12,7 +12,7 @@ Use this template for `docs/recap.md`. Replace every bracketed placeholder with 
 
 ## [YYYY-MM-DD] — [short work-group title]
 
-- **Category:** [Feature | Fix | Refactor | Documentation | Test | Tooling | Other]
+- **Category:** [features | fixes | refactors | infrastructure | testing | documentation | security | performance]
 - **Status:** [Completed | Partial | In progress | Blocked | Needs verification]
 - **What / why:** [what changed and the evidence-backed reason; use `Unknown` when intent is not supported]
 - **Important files:**
