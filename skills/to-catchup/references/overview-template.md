@@ -18,7 +18,7 @@ Trace the important runtime flows from an entry point through the relevant compo
 
 ## Important Modules
 
-Describe the modules a new developer is most likely to need, what each owns, and the boundaries between them.
+Describe the modules a new developer is most likely to need, including authentication or authorization, shared utilities, and API clients where present. Explain what each owns and the boundaries between them.
 
 ## Important Files
 

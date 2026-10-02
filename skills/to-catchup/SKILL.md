@@ -21,7 +21,9 @@ Create or update one evidence-based onboarding document at `docs/overview.md`. T
 1. Establish the repository root and inspect the top-level layout, package or dependency manifests, and existing documentation. Look for `docs/recap.md` and `docs/backlog.md` without assuming they exist.
 2. Inspect the repository areas that establish behavior and day-to-day work:
    - application entry points, startup/bootstrap code, and executable commands;
-   - core modules, routes or handlers, jobs or workers, persistence, schemas, and integration boundaries;
+   - authentication and authorization boundaries, session or identity handling, and security-sensitive middleware;
+   - core modules, shared utilities, routes or handlers, jobs or workers, persistence, schemas, and integration boundaries;
+   - API clients, adapters, external-service wrappers, and other integration boundaries;
    - tests, fixtures, examples, and test commands;
    - environment examples, configuration loaders, CI, deployment, migration, and release scripts;
    - generated artifacts or files that developers must not edit directly.

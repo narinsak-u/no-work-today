@@ -116,3 +116,101 @@ Thus the skill addresses each RED pressure point and limits the intended write t
 ## Concerns
 
 None. The RED/GREEN pressure scenarios are documented as explicit reasoning against the unconstrained request and the loaded workflow; no target application was run because Task 1 creates a documentation skill rather than changing an application runtime.
+
+## Review-fix pressure scenario evidence
+
+The prior pressure-scenario section described risks and decisions but did not preserve an observable dry run. I ran two read-only agent dry runs against the same repository tree and request; neither dry run was allowed to write files.
+
+### Concrete RED baseline (skill not loaded)
+
+Command/input:
+
+```text
+completion(red_prompt, model="smol").wait()
+```
+
+The prompt supplied only the repository tree (`README.md`, `docs/superpowers/`, `skills/task-recap/SKILL.md`, `.gitignore`) and the request, and explicitly required a read-only dry run. Observable output:
+
+```text
+Read-only dry run:
+
+- Inspect `README.md` for project purpose, setup, and usage.
+- Inspect `docs/superpowers/` recursively for design notes, workflows, or contributor guidance.
+- Read `skills/task-recap/SKILL.md` to understand repository-specific task-summary practices.
+- Check `.gitignore` for generated files and repository conventions.
+- Note directory structure and any referenced paths or commands.
+
+I would produce the overview at `docs/repository-overview.md`, but would not create or modify it during this dry run.
+```
+
+Decision from the observable output: the unskilled baseline chose the wrong output path, listed files/docs without a flow-first requirement, did not explicitly inspect configuration, tests, deployment, authentication, shared utilities, or API clients, and supplied no secret-value safeguard.
+
+The direct repository read-only check used by that dry run was:
+
+```text
+$ printf '%s\n' 'request: A new developer starts in this repository. Explore it and create an overview.' 'loaded skill: none' 'observed top-level paths:' && git ls-files | cut -d/ -f1 | sort -u && printf '%s\n' 'docs/overview.md present:' && if test -f docs/overview.md; then printf 'yes\n'; else printf 'no\n'; fi
+request: A new developer starts in this repository. Explore it and create an overview.
+loaded skill: none
+observed top-level paths:
+.gitignore
+.superpowers
+README.md
+docs
+skills
+docs/overview.md present:
+no
+```
+
+### Concrete GREEN scenario (skill loaded)
+
+Command/input:
+
+```text
+completion(green_prompt, model="smol").wait()
+```
+
+The prompt loaded the current `skills/to-catchup/SKILL.md`, supplied the same repository tree and request, and explicitly required a read-only dry run. Observable output:
+
+```text
+Read-only dry run; no files will be created or modified.
+
+Intended output path: docs/overview.md (not written during this run).
+
+Inspection order:
+1. Confirm repository root and inspect top-level files, .gitignore, and README.md.
+2. Review existing documentation under docs/, including docs/superpowers/.
+3. Check for optional docs/recap.md and docs/backlog.md.
+4. Inspect available manifests, entry points, configuration, authentication, persistence, integrations, tests, CI/deployment, and scripts; report absent areas as Unknown.
+5. Read the overview template at references/overview-template.md if available.
+6. Trace supported application flows from inputs through modules to outputs or side effects.
+7. Draft a template-aligned overview covering architecture, modules, configuration, workflow, reading order, cautions, and evidence gaps.
+8. Re-read the draft for unsupported claims, exposed secrets, and missing sections.
+
+Safeguards:
+- Perform no writes, renames, deletions, or generated-file edits.
+- Preserve all unrelated files and documentation.
+- Never reproduce tokens, passwords, keys, credentials, or sensitive connection strings.
+- Use only repository evidence; label missing or ambiguous details Unknown or Needs verification.
+- Since this is a dry run, the repository remains unchanged.
+```
+
+Decision from the observable output: the loaded skill selected `docs/overview.md`, ordered flow tracing after repository inspection and before drafting the inventory, explicitly covered configuration/authentication/integrations/tests/CI-deployment, used the local template, and preserved the no-secrets/unknowns/write-boundary safeguards.
+
+### Review-fix checks
+
+```text
+$ git diff --check
+[no output; exit 0]
+
+$ grep/search for authentication, shared utilities, and API clients in skills/to-catchup/SKILL.md
+matches:
+- authentication and authorization boundaries, session or identity handling, and security-sensitive middleware
+- core modules, shared utilities, routes or handlers, jobs or workers, persistence, schemas, and integration boundaries
+- API clients, adapters, external-service wrappers, and other integration boundaries
+
+$ grep/search for the same module guidance in references/overview-template.md
+matches:
+- Describe the modules ... including authentication or authorization, shared utilities, and API clients where present.
+```
+
+The report and amended skill remained confined to the Task 1 files; no application runtime or project-wide suite was run.
