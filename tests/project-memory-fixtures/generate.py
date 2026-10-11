@@ -134,6 +134,7 @@ def seed_recap(root: Path, control: Path) -> None:
     seed_legacy_recap(root, control, "recap-legacy-branch-mismatch", "fixture-old")
     seed_legacy_recap(root, control, "recap-legacy-branch-missing", "")
     seed_legacy_recap(root, control, "recap-legacy-branch-ambiguous", "fixture-main\n- **HEAD:** `fixture-old` on fixture-old")
+    seed_legacy_recap(root, control, "recap-rewritten-checkpoint", "fixture-main", rewritten=True)
 
     seed_recap_ownership(root, control)
     seed_legacy_recap_nongit(root, control)
