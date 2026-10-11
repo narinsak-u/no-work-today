@@ -49,7 +49,6 @@ Invoke the applicable skill once in each named fixture, then run `check` for it:
 - `catchup-legacy-untracked`, `backlog-legacy-untracked`: untracked, unmarked output; preserve its bytes.
 - `catchup-legacy-modified`, `backlog-legacy-modified`: tracked but modified, unmarked output; preserve its bytes.
 - `catchup-legacy-nongit`, `backlog-legacy-nongit`: existing unmarked output outside Git; preserve its bytes.
-
 Example: `python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures catchup-legacy-tracked`.
 
 ## Backlog assertions
@@ -120,6 +119,14 @@ python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skil
 ```
 
 Both checks require byte-for-byte preservation and no fingerprint adoption. The first additionally requires the output to remain untracked; the second requires its tracked output to remain dirty. Expected digests and the original dirty-state snapshot are stored in `.control`, outside the disposable repositories.
+
+Also invoke recap once in `recap-legacy-nongit`, then check it:
+
+```sh
+python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures recap-legacy-nongit
+```
+
+This existing unmarked recap is outside any Git worktree. The check requires its exact bytes to match the digest stored in sibling `.control/`, with no fingerprint adoption. The skill must stop and ask before adopting it.
 
 ## Legacy recap branch and checkpoint boundaries
 

@@ -134,9 +134,18 @@ def seed_recap(root: Path, control: Path) -> None:
     seed_legacy_recap(root, control, "recap-legacy-branch-missing", "")
     seed_legacy_recap(root, control, "recap-legacy-branch-ambiguous", "fixture-main\n- **HEAD:** `fixture-old` on fixture-old")
 
-    seed_legacy_recap(root, control, "recap-rewritten-checkpoint", "fixture-main", rewritten=True)
     seed_recap_ownership(root, control)
+    seed_legacy_recap_nongit(root, control)
 
+
+def seed_legacy_recap_nongit(root: Path, control: Path) -> None:
+    repo = root / "recap-legacy-nongit"
+    repo.mkdir(parents=True)
+    content = "# Legacy recap\n\nPreserve these exact unmarked non-Git bytes.\n"
+    write(repo, "docs/recap.md", content)
+    (control / "recap-legacy-nongit.sha256").write_text(
+        hashlib.sha256((repo / "docs/recap.md").read_bytes()).hexdigest() + "\n", encoding="ascii"
+    )
 
 def seed_recap_ownership(root: Path, control: Path) -> None:
     invalid = root / "recap-invalid"
