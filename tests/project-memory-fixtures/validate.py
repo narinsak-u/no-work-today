@@ -265,6 +265,13 @@ def check_legacy_recap(workspace: Path, name: str) -> None:
         require(set(snapshot(repo, rel)) == {"README.md"}, "legacy recap migration wrote outside its one owned output")
         print("PASS: matching legacy branch inferred, adopted and fingerprinted")
         return
+    if name == "recap-legacy-nongit":
+        require(not git_succeeds(repo, "rev-parse", "--is-inside-work-tree"), "non-Git recap fixture unexpectedly belongs to a Git worktree")
+        expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
+        require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{name} refusal changed recap bytes")
+        require(not fingerprint(path), f"{name} unmarked recap unexpectedly gained a fingerprint")
+        print("PASS: non-Git recap refusal preserved exact bytes and remains outside Git")
+        return
     expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
     require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{name} refusal changed recap bytes")
     require(not git(repo, "status", "--porcelain", "--", rel), f"{name} refusal dirtied the legacy recap")
