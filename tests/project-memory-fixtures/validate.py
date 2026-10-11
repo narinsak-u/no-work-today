@@ -26,13 +26,17 @@ def require(ok: bool, message: str) -> None:
 
 def fingerprint(path: Path) -> bool:
     data = path.read_bytes()
+    markers = list(re.finditer(rb"<!-- (?:skill-state|recap-state)\r?\n.*?-->", data, re.S))
+    marker_starts = list(re.finditer(rb"<!-- (?:skill-state|recap-state)\r?\n", data))
     matches = list(re.finditer(rb"(?m)^output_sha256: ([0-9a-f]{64})\r?\n", data))
-    if len(matches) != 1:
+    if len(markers) != 1 or len(marker_starts) != 1 or len(matches) != 1:
         return False
-    match = matches[0]
+    marker, match = markers[0], matches[0]
+    if not marker.start() <= match.start() < marker.end():
+        return False
     expected = match.group(1).decode("ascii")
     actual = hashlib.sha256(data[:match.start()] + data[match.end():]).hexdigest()
-    return actual == expected and data.count(b"<!--") == 1 and data.count(b"-->") == 1
+    return actual == expected
 
 
 def snapshot(repo: Path, exclude: str) -> dict[str, str]:
@@ -222,7 +226,10 @@ def check_recap_no_new(workspace: Path) -> None:
     expected_history = (workspace / ".control" / "recap-history.sha256").read_text(encoding="ascii").strip()
     history_end = text.find("## Current Point")
     require(history_end >= 0 and hashlib.sha256(text[:history_end].encode("utf-8")).hexdigest() == expected_history, "no-new run changed or duplicated historical entries")
-    require(state_value(text, "last_commit") == git(repo, "rev-parse", "HEAD"), "no-new run changed the completed checkpoint")
+    last = state_value(text, "last_commit")
+    require(re.fullmatch(r"[0-9a-f]{7,40}", last) is not None, "no-new checkpoint is not a full or abbreviated commit hash")
+    checkpoint = git(repo, "rev-parse", "--verify", f"{last}^{{commit}}")
+    require(checkpoint == git(repo, "rev-parse", "HEAD"), "no-new run changed the completed checkpoint")
     require(state_value(text, "pending_commits") == "none", "no-new run has unexpected pending commits")
     require(state_value(text, "branch") == "fixture-main", "no-new run changed branch binding")
     print("PASS: no-new-commit run preserved history/checkpoint with empty queue and valid fingerprint")
