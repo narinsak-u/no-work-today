@@ -242,6 +242,18 @@ def check_legacy_recap(workspace: Path, name: str) -> None:
     repo = workspace / name
     rel = OUTPUTS["recap"]
     path = repo / rel
+    if name in ("recap-legacy-untracked", "recap-legacy-modified"):
+        expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
+        require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{name} refusal changed recap bytes")
+        require(not fingerprint(path), f"{name} unmarked legacy recap unexpectedly gained a fingerprint")
+        status = git(repo, "status", "--porcelain", "--", rel)
+        if name.endswith("-untracked"):
+            require(status.startswith("?? "), "untracked legacy recap became tracked or otherwise changed")
+        else:
+            expected_status = (workspace / ".control" / f"{name}.dirty.txt").read_text(encoding="utf-8").strip()
+            require(status == expected_status and bool(status), "modified tracked legacy recap lost its dirty state")
+        print(f"PASS: {name} refusal preserved recap bytes and Git ownership state")
+        return
     text = path.read_text(encoding="utf-8")
     if name == "recap-legacy-branch-match":
         require(fingerprint(path), "matching legacy branch was not adopted with a valid fingerprint")

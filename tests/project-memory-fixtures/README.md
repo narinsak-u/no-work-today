@@ -96,6 +96,31 @@ Each check requires an exact full-hash queue shrinking by 100 and every processe
 python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures recap-no-new
 ```
 
+## Recap ownership guards
+
+### Invalid fingerprint and legacy ownership
+
+Run the `recap-invalid` scenario in this order: invoke recap once to create a managed output, arm an intentional user edit, invoke recap again, then assert preservation:
+
+```sh
+
+# Invoke recap once in recap-invalid first.
+python3 tests/project-memory-fixtures/validate.py arm-invalid /tmp/project-memory-skill-fixtures recap-invalid
+# Invoke recap again after arming.
+python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures recap-invalid
+```
+
+The arm command records the edited output digest in `.control`; the final check requires those exact bytes to remain and the fingerprint to remain invalid.
+
+Invoke recap once in each unmarked legacy fixture, then check it:
+
+```sh
+python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures recap-legacy-untracked
+python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures recap-legacy-modified
+```
+
+Both checks require byte-for-byte preservation and no fingerprint adoption. The first additionally requires the output to remain untracked; the second requires its tracked output to remain dirty. Expected digests and the original dirty-state snapshot are stored in `.control`, outside the disposable repositories.
+
 ## Legacy recap branch and checkpoint boundaries
 
 Invoke recap once in each fixture below, then run its matching validator command from the source repository root:
