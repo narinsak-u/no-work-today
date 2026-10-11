@@ -11,6 +11,25 @@ import subprocess
 
 from generate import git, legacy_backlog
 OUTPUTS = {"catchup": "docs/overview.md", "backlog": "docs/backlog.md", "recap": "docs/recap.md"}
+OVERVIEW_HEADINGS = (
+    "Purpose",
+    "Stack",
+    "Architecture",
+    "Application Flow",
+    "Important Modules",
+    "Important Files",
+    "Data Flow",
+    "External Dependencies",
+    "Environment and Configuration",
+    "Development Workflow",
+    "Recommended Reading Order",
+    "Cautions",
+)
+
+
+def require_overview_headings(text: str, label: str) -> None:
+    for heading in OVERVIEW_HEADINGS:
+        require(f"## {heading}" in text, f"{label} lacks template section {heading}")
 
 
 def git_succeeds(repo: Path, *args: str) -> bool:
@@ -26,7 +45,7 @@ def require(ok: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def fingerprint(path: Path) -> bool:
+def has_valid_fingerprint(path: Path) -> bool:
     data = path.read_bytes()
     markers = list(re.finditer(rb"<!-- (?:skill-state|recap-state)\r?\n.*?-->", data, re.S))
     marker_starts = list(re.finditer(rb"<!-- (?:skill-state|recap-state)\r?\n", data))
@@ -69,7 +88,7 @@ def check_repeat(workspace: Path, name: str) -> None:
     repo = workspace / name
     path = repo / rel
     require(path.is_file(), f"Missing owned output {rel}; invoke the skill")
-    require(fingerprint(path), f"{rel} has no valid single fingerprint")
+    require(has_valid_fingerprint(path), f"{rel} has no valid single fingerprint")
     state = git(repo, "status", "--porcelain", "--", rel)
     require(bool(state), f"{rel} is not dirty; fixture must prove repeat update while uncommitted")
     print(f"PASS: valid fingerprint, dirty owned output, {rel} present")
@@ -82,7 +101,7 @@ def check_invalid(workspace: Path, name: str) -> None:
     path = repo / rel
     expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
     require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{rel} changed after invalid fingerprint; user bytes must remain exact")
-    require(not fingerprint(path), f"{rel} unexpectedly validates despite deliberate edit")
+    require(not has_valid_fingerprint(path), f"{rel} unexpectedly validates despite deliberate edit")
     print(f"PASS: invalid fingerprint preserved all bytes in {rel}")
 
 
@@ -94,11 +113,10 @@ def check_legacy(workspace: Path, name: str) -> None:
     repo = workspace / name
     path = repo / rel
     if name.endswith("-tracked"):
-        require(path.is_file() and fingerprint(path), f"clean tracked legacy {rel} was not adopted with a valid fingerprint")
+        require(path.is_file() and has_valid_fingerprint(path), f"clean tracked legacy {rel} was not adopted with a valid fingerprint")
         text = path.read_text(encoding="utf-8")
         if skill == "catchup":
-            for heading in ("Purpose", "Stack", "Architecture", "Application Flow", "Important Modules", "Important Files", "Data Flow", "External Dependencies", "Environment and Configuration", "Development Workflow", "Recommended Reading Order", "Cautions"):
-                require(f"## {heading}" in text, f"adopted overview lacks template section {heading}")
+            require_overview_headings(text, "adopted overview")
             require("accepts a name and returns a greeting" in text, "adopted overview lost the existing project purpose")
             require("fixture-secret-do-not-copy" not in text, "secret fixture value was copied into adopted overview")
         else:
@@ -125,10 +143,9 @@ def check_catchup(workspace: Path) -> None:
     repo = workspace / "catchup-valid"
     rel = OUTPUTS["catchup"]
     path = repo / rel
-    require(path.is_file() and fingerprint(path), "overview missing or fingerprint invalid")
+    require(path.is_file() and has_valid_fingerprint(path), "overview missing or fingerprint invalid")
     text = path.read_text(encoding="utf-8")
-    for heading in ("Purpose", "Stack", "Architecture", "Application Flow", "Important Modules", "Important Files", "Data Flow", "External Dependencies", "Environment and Configuration", "Development Workflow", "Recommended Reading Order", "Cautions"):
-        require(f"## {heading}" in text, f"overview lacks template section {heading}")
+    require_overview_headings(text, "overview")
     require("accepts a name and returns a greeting" in text, "overview omits the README-supported service purpose")
     require("greet(name)" in text and "hello" in text, "overview omits the source-supported greeting implementation")
     require("APP_MODE" in text and "API_TOKEN" in text, "overview omits the fixture configuration variable names")
@@ -141,7 +158,7 @@ def check_backlog(workspace: Path) -> None:
     repo = workspace / "backlog-valid"
     rel = OUTPUTS["backlog"]
     path = repo / rel
-    require(path.is_file() and fingerprint(path), "backlog missing or fingerprint invalid")
+    require(path.is_file() and has_valid_fingerprint(path), "backlog missing or fingerprint invalid")
     text = path.read_text(encoding="utf-8")
     sections = ["In Progress", "Todo", "Blocked", "Needs Review", "Done"]
     positions = [text.find(f"## {section}") for section in sections]
@@ -203,7 +220,7 @@ def resolve_entry_hashes(lines: list[str], selected: list[str]) -> list[str]:
 def check_recap(workspace: Path, expected_count: int) -> None:
     repo = workspace / "recap-large-history"
     path = repo / OUTPUTS["recap"]
-    require(path.is_file() and fingerprint(path), "recap missing or fingerprint invalid")
+    require(path.is_file() and has_valid_fingerprint(path), "recap missing or fingerprint invalid")
     text = path.read_text(encoding="utf-8")
     selected = selected_hashes(repo)
     require(int(git(repo, "rev-list", "--count", "HEAD")) > 1000, "fixture must exceed 1,000 commits")
@@ -238,7 +255,7 @@ def check_recap(workspace: Path, expected_count: int) -> None:
 def check_recap_no_new(workspace: Path) -> None:
     repo = workspace / "recap-large-history"
     path = repo / OUTPUTS["recap"]
-    require(path.is_file() and fingerprint(path), "recap missing or fingerprint invalid after no-new run")
+    require(path.is_file() and has_valid_fingerprint(path), "recap missing or fingerprint invalid after no-new run")
     text = path.read_text(encoding="utf-8")
     expected_history = (workspace / ".control" / "recap-history.sha256").read_text(encoding="ascii").strip()
     history_end = text.find("## Current Point")
@@ -259,7 +276,7 @@ def check_legacy_recap(workspace: Path, name: str) -> None:
     if name in ("recap-legacy-untracked", "recap-legacy-modified"):
         expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
         require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{name} refusal changed recap bytes")
-        require(not fingerprint(path), f"{name} unmarked legacy recap unexpectedly gained a fingerprint")
+        require(not has_valid_fingerprint(path), f"{name} unmarked legacy recap unexpectedly gained a fingerprint")
         status = git(repo, "status", "--porcelain", "--", rel)
         if name.endswith("-untracked"):
             require(status.startswith("?? "), "untracked legacy recap became tracked or otherwise changed")
@@ -270,7 +287,7 @@ def check_legacy_recap(workspace: Path, name: str) -> None:
         return
     text = path.read_text(encoding="utf-8")
     if name == "recap-legacy-branch-match":
-        require(fingerprint(path), "matching legacy branch was not adopted with a valid fingerprint")
+        require(has_valid_fingerprint(path), "matching legacy branch was not adopted with a valid fingerprint")
         require(state_value(text, "branch") == "fixture-main", "legacy branch was not inferred from Current Point")
         require(state_value(text, "pending_commits") == "none", "matching legacy checkpoint should have no pending work")
         require(state_value(text, "last_commit") == git(repo, "rev-parse", "HEAD"), "matching legacy checkpoint should equal the post-adoption HEAD")
@@ -286,7 +303,7 @@ def check_legacy_recap(workspace: Path, name: str) -> None:
         require(not git_succeeds(repo, "rev-parse", "--is-inside-work-tree"), "non-Git recap fixture unexpectedly belongs to a Git worktree")
         expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
         require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{name} refusal changed recap bytes")
-        require(not fingerprint(path), f"{name} unmarked recap unexpectedly gained a fingerprint")
+        require(not has_valid_fingerprint(path), f"{name} unmarked recap unexpectedly gained a fingerprint")
         print("PASS: non-Git recap refusal preserved exact bytes and remains outside Git")
         return
     expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
