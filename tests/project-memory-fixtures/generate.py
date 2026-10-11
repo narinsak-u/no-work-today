@@ -32,14 +32,22 @@ def commit(repo: Path, message: str) -> None:
     git(repo, "commit", "-qm", message, env={**os.environ, "GIT_AUTHOR_DATE": "2001-01-01T00:00:00Z", "GIT_COMMITTER_DATE": "2001-01-01T00:00:00Z"})
 
 
-def seed_project(repo: Path) -> None:
+def seed_common_project_files(repo: Path) -> None:
     write(repo, "README.md", "# Fixture application\n\nA tiny service that accepts a name and returns a greeting.\n")
     write(repo, "src/app.py", 'def greet(name):\n    return f"hello, {name}"\n')
     write(repo, "pyproject.toml", '[project]\nname = "fixture-app"\nversion = "0.1.0"\n')
     write(repo, "tests/test_app.py", "def test_greeting():\n    assert True\n")
+
+
+def seed_project(repo: Path) -> None:
+    seed_common_project_files(repo)
     write(repo, "config/example.env", "APP_MODE=development\nAPI_TOKEN=fixture-secret-do-not-copy\n")
     write(repo, "notes/unrelated.txt", "Preserve this file byte-for-byte.\n")
     commit(repo, "Create small documented service")
+
+
+def seed_project_nogit(repo: Path) -> None:
+    seed_common_project_files(repo)
 
 
 def seed_catchup(root: Path) -> None:
@@ -58,13 +66,6 @@ def seed_catchup(root: Path) -> None:
                 commit(repo, "Add legacy overview")
             if name == "catchup-legacy-modified":
                 write(repo, "docs/overview.md", "# Legacy overview\n\nUser modification.\n")
-
-
-def seed_project_nogit(repo: Path) -> None:
-    write(repo, "README.md", "# Fixture application\n\nA tiny service that accepts a name and returns a greeting.\n")
-    write(repo, "src/app.py", 'def greet(name):\n    return f"hello, {name}"\n')
-    write(repo, "pyproject.toml", '[project]\nname = "fixture-app"\nversion = "0.1.0"\n')
-    write(repo, "tests/test_app.py", "def test_greeting():\n    assert True\n")
 
 
 def seed_backlog(root: Path) -> None:

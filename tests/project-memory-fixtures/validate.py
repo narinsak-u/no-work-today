@@ -213,7 +213,7 @@ def check_recap(workspace: Path, expected_count: int) -> None:
     require(visible == pending[:100], "Current Point does not list the exact next up-to-100 full pending hashes")
     require("older" in text.lower() and ("outside" in text.lower() or "omitted" in text.lower()), "older-than-1,000 history omission is invisible")
     if expected_count == 100:
-        require("1000" in text, "initial selected-window size is not visible")
+        require(re.search(r"(?<!\d)1,?000(?!\d)", text) is not None, "initial selected-window size is not visible")
         (workspace / ".control" / "recap-initial.sha256").write_text(hashlib.sha256(path.read_bytes()).hexdigest() + "\n", encoding="ascii")
     if expected_count == 1000:
         history_end = text.find("## Current Point")
