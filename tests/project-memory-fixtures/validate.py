@@ -18,6 +18,9 @@ def git(repo: Path, *args: str, check: bool = True) -> str:
         raise AssertionError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
 
+def git_succeeds(repo: Path, *args: str) -> bool:
+    return subprocess.run(["git", *args], cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
+
 
 def require(ok: bool, message: str) -> None:
     if not ok:
@@ -235,6 +238,37 @@ def check_recap_no_new(workspace: Path) -> None:
     print("PASS: no-new-commit run preserved history/checkpoint with empty queue and valid fingerprint")
 
 
+def check_legacy_recap(workspace: Path, name: str) -> None:
+    repo = workspace / name
+    rel = OUTPUTS["recap"]
+    path = repo / rel
+    text = path.read_text(encoding="utf-8")
+    if name == "recap-legacy-branch-match":
+        require(fingerprint(path), "matching legacy branch was not adopted with a valid fingerprint")
+        require(state_value(text, "branch") == "fixture-main", "legacy branch was not inferred from Current Point")
+        require(state_value(text, "pending_commits") == "none", "matching legacy checkpoint should have no pending work")
+        require(git(repo, "rev-parse", "--verify", f"{state_value(text, 'last_commit')}^{{commit}}") == git(repo, "rev-parse", "HEAD"), "matching legacy checkpoint changed")
+        expected_history = (workspace / ".control" / f"{name}.history.txt").read_text(encoding="utf-8")
+        require(text.startswith(expected_history), "legacy history entry changed during migration")
+        require(set(snapshot(repo, rel)) == {"README.md"}, "legacy recap migration wrote outside its one owned output")
+        print("PASS: matching legacy branch inferred, adopted and fingerprinted")
+        return
+    expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
+    require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{name} refusal changed recap bytes")
+    require(not git(repo, "status", "--porcelain", "--", rel), f"{name} refusal dirtied the legacy recap")
+    if name == "recap-legacy-branch-ambiguous":
+        require(text.count("- **HEAD:**") == 2, "ambiguous fixture must contain competing legacy branch metadata")
+    elif name == "recap-legacy-branch-mismatch":
+        require(git(repo, "branch", "--show-current") == "fixture-main" and "on fixture-old" in text, "legacy mismatch fixture is not branch-bound to another branch")
+    elif name == "recap-legacy-branch-missing":
+        require(text.count("- **HEAD:**") == 1 and " on fixture-main" not in text, "missing-branch fixture unexpectedly identifies a unique branch")
+    elif name == "recap-rewritten-checkpoint":
+        checkpoint = state_value(text, "last_commit")
+        require(git_succeeds(repo, "rev-parse", "--verify", f"{checkpoint}^{{commit}}"), "rewritten checkpoint fixture commit is unavailable")
+        require(not git_succeeds(repo, "merge-base", "--is-ancestor", checkpoint, "HEAD"), "rewritten checkpoint must not be an ancestor of current HEAD")
+    print(f"PASS: {name} refusal preserved legacy recap bytes")
+
+
 def check_branch_mismatch(workspace: Path) -> None:
     repo = workspace / "recap-large-history"
     path = repo / OUTPUTS["recap"]
@@ -262,6 +296,8 @@ def main() -> None:
         check_invalid(workspace, name)
     elif name.startswith(("catchup-legacy", "backlog-legacy")):
         check_legacy(workspace, name)
+    elif name.startswith("recap-legacy-") or name == "recap-rewritten-checkpoint":
+        check_legacy_recap(workspace, name)
     elif name.startswith("recap-progress-"):
         try:
             check_recap(workspace, int(name.removeprefix("recap-progress-")))
