@@ -45,7 +45,7 @@ The byte digest is saved only in `.control/`. The edit must remain invalid and b
 
 Invoke the applicable skill once in each named fixture, then run `check` for it:
 
-- `catchup-legacy-tracked`, `backlog-legacy-tracked`: clean tracked, unmarked output; adopt and fingerprint it.
+- `catchup-legacy-tracked`, `backlog-legacy-tracked`: clean tracked, unmarked output; adopt and fingerprint it. The catchup overview must retain the README-supported project purpose, all template sections, and redact the fixture secret; backlog must preserve the completed `BL-014` record.
 - `catchup-legacy-untracked`, `backlog-legacy-untracked`: untracked, unmarked output; preserve its bytes.
 - `catchup-legacy-modified`, `backlog-legacy-modified`: tracked but modified, unmarked output; preserve its bytes.
 - `catchup-legacy-nongit`, `backlog-legacy-nongit`: existing unmarked output outside Git; preserve its bytes.
