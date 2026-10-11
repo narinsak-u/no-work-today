@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import sys
 import hashlib
-from pathlib import Path
-import re
 import json
+import re
 import subprocess
+import sys
+from pathlib import Path
 
 from generate import git, legacy_backlog
 OUTPUTS = {"catchup": "docs/overview.md", "backlog": "docs/backlog.md", "recap": "docs/recap.md"}
@@ -94,21 +94,22 @@ def arm_repeat(workspace: Path, name: str) -> None:
     repo = workspace / name
     output = repo / rel
     control = repeat_control(workspace, name)
-    require(output.is_file() and has_valid_fingerprint(output), "invoke and check the skill once before arming its repeat")
-    require(not control.exists(), f"{name} repeat was already armed")
+    require(output.is_file() and has_valid_fingerprint(output), "invoke the skill once before arming its repeat")
+    require(control.is_file(), "run the first repeat check before arming changed evidence")
+    evidence = json.loads(control.read_text(encoding="utf-8"))
+    require("armed_inputs" not in evidence, f"{name} repeat was already armed")
     first_digest = hashlib.sha256(output.read_bytes()).hexdigest()
+    require(first_digest == evidence["first_output_sha256"], f"{rel} changed after its first repeat check")
     if skill == "catchup":
         app = repo / "src/app.py"
         app.write_text(app.read_text(encoding="utf-8").replace('return f"hello, {name}"', 'return f"hello, {name.strip()}"'), encoding="utf-8")
         readme = repo / "README.md"
-        readme.write_text(readme.read_text(encoding="utf-8").rstrip() + " The greeting trims surrounding whitespace from names.\\n", encoding="utf-8")
+        readme.write_text(readme.read_text(encoding="utf-8").rstrip() + " The greeting trims surrounding whitespace from names.\n", encoding="utf-8")
     else:
         app = repo / "src/app.py"
-        app.write_text(app.read_text(encoding="utf-8").rstrip() + "\\n\\n# TODO: Reject names longer than 80 characters with a documented error.\\n", encoding="utf-8")
-    control.write_text(json.dumps({
-        "first_output_sha256": first_digest,
-        "armed_inputs": snapshot(repo, rel),
-    }, sort_keys=True, indent=2) + "\\n", encoding="utf-8")
+        app.write_text(app.read_text(encoding="utf-8").rstrip() + "\n\n# TODO: Reject names longer than 80 characters with a documented error.\n", encoding="utf-8")
+    evidence["armed_inputs"] = snapshot(repo, rel)
+    control.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     print(f"Armed changed evidence for {name}; invoke the skill again, then check it")
 
 
@@ -122,13 +123,16 @@ def check_repeat(workspace: Path, name: str) -> None:
     state = git(repo, "status", "--porcelain", "--", rel)
     require(bool(state), f"{rel} is not dirty; fixture must prove repeat update while uncommitted")
     control = repeat_control(workspace, name)
+    current_digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if not control.exists():
-        control.write_text(json.dumps({"first_output_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}, sort_keys=True) + "\\n", encoding="utf-8")
+        control.write_text(json.dumps({"first_output_sha256": current_digest}, sort_keys=True) + "\n", encoding="utf-8")
         print(f"PASS: first-run output fingerprint and dirty ownership, {rel} present")
         return
     evidence = json.loads(control.read_text(encoding="utf-8"))
-    require(hashlib.sha256(path.read_bytes()).hexdigest() != evidence["first_output_sha256"], f"{rel} bytes did not change after armed evidence changed")
+    require("armed_inputs" in evidence, "arm changed evidence after the first output check before invoking the skill again")
+    require(current_digest != evidence["first_output_sha256"], f"{rel} bytes did not change after armed evidence changed")
     require(snapshot(repo, rel) == evidence["armed_inputs"], "non-output fixture paths changed after repeat evidence was armed")
+    print(f"PASS: repeat output changed with a valid fingerprint and preserved all non-output fixture files")
 
 def check_invalid(workspace: Path, name: str) -> None:
     skill = name.split("-", 1)[0]
@@ -182,14 +186,12 @@ def check_catchup(workspace: Path) -> None:
     require(path.is_file() and has_valid_fingerprint(path), "overview missing or fingerprint invalid")
     text = path.read_text(encoding="utf-8")
     require_overview_headings(text, "overview")
-    repeated = repeat_control(workspace, "catchup-valid").exists()
-    if repeated:
-        require("trims surrounding whitespace" in text, "second overview omits the changed whitespace-trimming behavior")
-    else:
-        require("accepts a name and returns a greeting" in text, "overview omits the README-supported service purpose")
-        require("greet(name)" in text and "hello" in text, "overview omits the source-supported greeting implementation")
+    require("accepts a name and returns a greeting" in text, "overview omits the README-supported service purpose")
+    require("greet(name)" in text and "hello" in text, "overview omits the source-supported greeting implementation")
     require("APP_MODE" in text and "API_TOKEN" in text, "overview omits the fixture configuration variable names")
     require("fixture-secret-do-not-copy" not in text, "secret fixture value was copied")
+    if "armed_inputs" in json.loads(repeat_control(workspace, "catchup-valid").read_text(encoding="utf-8")):
+        require("trims surrounding whitespace" in text, "second overview omits the changed whitespace-trimming behavior")
     require(set(snapshot(repo, rel)) == {"README.md", "src/app.py", "pyproject.toml", "tests/test_app.py", "config/example.env", "notes/unrelated.txt"}, "catchup wrote a path besides docs/overview.md")
     print("PASS: catchup evidence-shaped output, secret redaction, fingerprint and one-output ownership")
 
@@ -209,17 +211,27 @@ def check_backlog(workspace: Path) -> None:
     require(len(ids) == len(set(ids)), "backlog IDs are not unique")
     require(all(int(identifier[3:]) > 14 for identifier in ids if identifier != "BL-014"), "new backlog ID recycled or precedes reserved Done ID BL-014")
     done = "### BL-014" + legacy_backlog_expected().split("### BL-014", 1)[1].rstrip()
-    repeated = repeat_control(workspace, "backlog-valid").exists()
+    evidence = json.loads(repeat_control(workspace, "backlog-valid").read_text(encoding="utf-8"))
+    repeated = "armed_inputs" in evidence
     new_ids = [identifier for identifier in ids if identifier != "BL-014"]
-    require(len(new_ids) == (2 if repeated else 1), "backlog must preserve the first generated item and add exactly one item for the added fixture TODO on repeat")
+    expected_ids = {"BL-015", "BL-016"} if repeated else {"BL-015"}
+    require(set(new_ids) == expected_ids, "backlog must preserve the first generated item and add exactly one item for the added fixture TODO on repeat")
+    item_blocks = {}
+    for match in items:
+        next_item = next((other.start() for other in items if other.start() > match.start()), len(text))
+        next_section_match = re.search(r"(?m)^## ", text[match.end():])
+        next_section = match.end() + next_section_match.start() if next_section_match else len(text)
+        item_blocks[match.group(1)] = text[match.start():min(next_item, next_section)]
+    first_item = item_blocks["BL-015"]
     if repeated:
-        require("BL-015" in new_ids, "first generated backlog item ID BL-015 was not preserved")
-        require(any("80 characters" in text[match.start(): next((other.start() for other in items if other.start() > match.start()), len(text))] for match in items if match.group(1) != "BL-014"), "second backlog item does not cite the added long-name TODO")
-    item_start = next(match.start() for match in items if match.group(1) == new_ids[0])
-    next_item = next((match.start() for match in items if match.start() > item_start), len(text))
-    item = text[item_start:next_item]
-    new_status = re.search(r"(?m)^- \*\*Status:\*\* (.+)$", item)
-    require(new_status is not None and new_status.group(1) == "Todo", "the sole new item for the unstarted empty-name TODO must remain Todo")
+        require(first_item == evidence.get("first_backlog_item"), "the original generated backlog item changed during the repeat update")
+        second_item = item_blocks["BL-016"]
+        require("80 characters" in second_item, "second backlog item does not cite the added long-name TODO")
+    else:
+        second_item = None
+    item_expectations = [("BL-015", first_item, "empty name")]
+    if second_item is not None:
+        item_expectations.append(("BL-016", second_item, "80 character"))
     required_fields = {
         "Priority": "Low",
         "Context": None,
@@ -230,23 +242,27 @@ def check_backlog(workspace: Path) -> None:
         "Blocked by": "None",
         "Completion": "Not completed",
     }
-    for field, value in required_fields.items():
-        match = re.search(rf"(?m)^- \*\*{re.escape(field)}:\*\*(?: (.*))?$", item)
-        require(match is not None, f"new backlog item lacks required {field} field")
-        if value is not None:
-            require(match.group(1) == value, f"new backlog item has incorrect {field}")
-    require(bool(re.search(r"(?m)^- \*\*Context:\*\* .+src/app\.py.+TODO.+documented error", item, re.IGNORECASE)), "new backlog context must cite the concrete TODO and documented-error outcome")
-    tasks_match = re.search(r"(?ms)^- \*\*Tasks:\*\*\n((?:  - \[[ xX]\] .+\n?)+)", item)
-    require(tasks_match is not None and 1 <= len(re.findall(r"(?m)^  - \[[ xX]\] .+$", tasks_match.group(1))) <= 5, "new backlog item must have a finite task checklist")
-    task_lines = re.findall(r"(?m)^  - \[[ xX]\] (.+)$", tasks_match.group(1) if tasks_match else "")
-    require(all("empty name" in task.lower().replace("-", " ") for task in task_lines), "backlog task checklist contains work unrelated to the fixture TODO")
-    files_match = re.search(r"(?m)^- \*\*Files:\*\* (.+)$", item)
-    file_paths = re.findall(r"`([^`]+)`", files_match.group(1) if files_match else "")
-    require(len(file_paths) == 2 and set(file_paths) == {"src/app.py", "tests/test_app.py"}, "new backlog Files must cite only fixture-supported source/test files")
-    for field in ("Related", "Depends on", "Blocked by"):
-        require(re.search(rf"(?m)^- \*\*{field}:\*\* None$", item) is not None, f"new backlog item has unsupported {field}")
-    for field in ("Completed on", "Completion commit", "Completion evidence", "Completion notes"):
-        require(re.search(rf"(?m)^  - \*\*{field}:\*\* —$", item) is not None, f"unfinished item must leave {field} unset")
+    for identifier, item, expected_task in item_expectations:
+        status = re.search(r"(?m)^- \*\*Status:\*\* (.+)$", item)
+        require(status is not None and status.group(1) == "Todo", f"{identifier} for the unstarted fixture TODO must remain Todo")
+        for field, value in required_fields.items():
+            match = re.search(rf"(?m)^- \*\*{re.escape(field)}:\*\*(?: (.*))?$", item)
+            require(match is not None, f"{identifier} lacks required {field} field")
+            if value is not None:
+                require(match.group(1) == value, f"{identifier} has incorrect {field}")
+        require(bool(re.search(r"(?m)^- \*\*Context:\*\* .+src/app\.py.+TODO.+documented error", item, re.IGNORECASE)), f"{identifier} context must cite its concrete TODO and documented-error outcome")
+        tasks_match = re.search(r"(?ms)^- \*\*Tasks:\*\*\n((?:  - \[[ xX]\] .+\n?)+)", item)
+        require(tasks_match is not None and 1 <= len(re.findall(r"(?m)^  - \[[ xX]\] .+$", tasks_match.group(1))) <= 5, f"{identifier} must have a finite task checklist")
+        task_lines = re.findall(r"(?m)^  - \[[ xX]\] (.+)$", tasks_match.group(1) if tasks_match else "")
+        normalized_tasks = [task.lower().replace("-", " ") for task in task_lines]
+        require(all(expected_task in task for task in normalized_tasks), f"{identifier} task checklist contains work unrelated to its fixture TODO")
+        files_match = re.search(r"(?m)^- \*\*Files:\*\* (.+)$", item)
+        file_paths = re.findall(r"`([^`]+)`", files_match.group(1) if files_match else "")
+        require(len(file_paths) == 2 and set(file_paths) == {"src/app.py", "tests/test_app.py"}, f"{identifier} Files must cite only fixture-supported source/test files")
+        for field in ("Related", "Depends on", "Blocked by"):
+            require(re.search(rf"(?m)^- \*\*{field}:\*\* None$", item) is not None, f"{identifier} has unsupported {field}")
+        for field in ("Completed on", "Completion commit", "Completion evidence", "Completion notes"):
+            require(re.search(rf"(?m)^  - \*\*{field}:\*\* —$", item) is not None, f"unfinished {identifier} must leave {field} unset")
     require(done in text, "Done item or its completion record was not preserved byte-for-byte")
     allowed = {"Todo", "In Progress", "Blocked", "Needs Review", "Done"}
     for index, match in enumerate(items):
@@ -257,6 +273,9 @@ def check_backlog(workspace: Path) -> None:
         section = max((p, s) for p, s in zip(positions, sections) if p < match.start())[1]
         require(section == status.group(1), f"{match.group(1)} status does not match its section")
         require(re.search(r"(?m)^- \*\*Priority:\*\* (High|Medium|Low)$", block), f"{match.group(1)} has invalid/missing priority")
+    if not repeated:
+        evidence["first_backlog_item"] = first_item
+        repeat_control(workspace, "backlog-valid").write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     require(set(snapshot(repo, rel)) == {"README.md", "src/app.py", "pyproject.toml", "tests/test_app.py", "config/example.env", "notes/unrelated.txt"}, "backlog wrote a path besides docs/backlog.md")
     print("PASS: stable unique IDs, preserved Done record, five sections, valid status placement, one-output ownership")
 
@@ -404,6 +423,7 @@ def check_branch_mismatch(workspace: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
     arm = sub.add_parser("arm-invalid"); arm.add_argument("workspace", type=Path); arm.add_argument("scenario")
     repeat = sub.add_parser("arm-repeat"); repeat.add_argument("workspace", type=Path); repeat.add_argument("scenario")
     check = sub.add_parser("check"); check.add_argument("workspace", type=Path); check.add_argument("scenario")
