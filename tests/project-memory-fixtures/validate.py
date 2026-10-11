@@ -7,20 +7,17 @@ import hashlib
 from pathlib import Path
 import re
 import subprocess
-import sys
 
-from generate import legacy_backlog
+from generate import git, legacy_backlog
 OUTPUTS = {"catchup": "docs/overview.md", "backlog": "docs/backlog.md", "recap": "docs/recap.md"}
 
 
-def git(repo: Path, *args: str, check: bool = True) -> str:
-    result = subprocess.run(["git", *args], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if check and result.returncode:
-        raise AssertionError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
-    return result.stdout.strip()
-
 def git_succeeds(repo: Path, *args: str) -> bool:
-    return subprocess.run(["git", *args], cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
+    try:
+        git(repo, *args)
+    except subprocess.CalledProcessError:
+        return False
+    return True
 
 
 def require(ok: bool, message: str) -> None:
@@ -114,7 +111,7 @@ def check_legacy(workspace: Path, name: str) -> None:
             expected += "\nUser edit to legacy backlog.\n"
         require(path.read_text(encoding="utf-8") == expected, f"refused legacy {rel} was overwritten or changed")
     if name.endswith("-untracked"):
-        require(not git(repo, "ls-files", "--error-unmatch", rel, check=False), "untracked legacy output became tracked")
+        require(not git_succeeds(repo, "ls-files", "--error-unmatch", rel), "untracked legacy output became tracked")
     print(f"PASS: legacy adoption/refusal behavior for {name}")
 
 
