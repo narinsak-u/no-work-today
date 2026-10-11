@@ -160,10 +160,10 @@ def check_legacy(workspace: Path, name: str) -> None:
             require("accepts a name and returns a greeting" in text, "adopted overview lost the existing project purpose")
             require("fixture-secret-do-not-copy" not in text, "secret fixture value was copied into adopted overview")
         else:
-            done = "### BL-014" + legacy_backlog_expected().split("### BL-014", 1)[1].rstrip()
+            done = "### BL-014" + legacy_backlog().split("### BL-014", 1)[1].rstrip()
             require(done in text, "adopted backlog did not preserve BL-014 and its completion record byte-for-byte")
     else:
-        expected = "# Legacy overview\n\nKeep this unmarked content.\n" if skill == "catchup" else legacy_backlog_expected()
+        expected = "# Legacy overview\n\nKeep this unmarked content.\n" if skill == "catchup" else legacy_backlog()
         if name == "catchup-legacy-modified":
             expected = "# Legacy overview\n\nUser modification.\n"
         if name == "backlog-legacy-modified":
@@ -172,11 +172,6 @@ def check_legacy(workspace: Path, name: str) -> None:
     if name.endswith("-untracked"):
         require(not git_succeeds(repo, "ls-files", "--error-unmatch", rel), "untracked legacy output became tracked")
     print(f"PASS: legacy adoption/refusal behavior for {name}")
-
-
-def legacy_backlog_expected() -> str:
-    return legacy_backlog()
-
 
 
 def check_catchup(workspace: Path) -> None:
@@ -210,7 +205,7 @@ def check_backlog(workspace: Path) -> None:
     ids = [match.group(1) for match in items]
     require(len(ids) == len(set(ids)), "backlog IDs are not unique")
     require(all(int(identifier[3:]) > 14 for identifier in ids if identifier != "BL-014"), "new backlog ID recycled or precedes reserved Done ID BL-014")
-    done = "### BL-014" + legacy_backlog_expected().split("### BL-014", 1)[1].rstrip()
+    done = "### BL-014" + legacy_backlog().split("### BL-014", 1)[1].rstrip()
     evidence = json.loads(repeat_control(workspace, "backlog-valid").read_text(encoding="utf-8"))
     repeated = "armed_inputs" in evidence
     new_ids = [identifier for identifier in ids if identifier != "BL-014"]
