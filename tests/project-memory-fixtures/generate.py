@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -118,7 +119,7 @@ def legacy_backlog() -> str:
 """
 
 
-def seed_recap(root: Path) -> None:
+def seed_recap(root: Path, control: Path) -> None:
     repo = root / "recap-large-history"
     init_repo(repo)
     write(repo, "README.md", "# History fixture\n\nEach commit records one numbered event.\n")
@@ -127,6 +128,72 @@ def seed_recap(root: Path) -> None:
         with (repo / "README.md").open("a", encoding="utf-8") as f:
             f.write(f"\nHistory event {index:04d}.\n")
         commit(repo, f"Record history event {index:04d}")
+    seed_legacy_recap(root, control, "recap-legacy-branch-match", "fixture-main")
+    seed_legacy_recap(root, control, "recap-legacy-branch-mismatch", "fixture-old")
+    seed_legacy_recap(root, control, "recap-legacy-branch-missing", "")
+    seed_legacy_recap(root, control, "recap-legacy-branch-ambiguous", "fixture-main\n- **HEAD:** `fixture-old` on fixture-old")
+
+    seed_legacy_recap(root, control, "recap-rewritten-checkpoint", "fixture-main", rewritten=True)
+
+
+def seed_legacy_recap(root: Path, control: Path, name: str, branch_line: str, rewritten: bool = False) -> None:
+    repo = root / name
+    init_repo(repo)
+    write(repo, "README.md", f"# {name}\n")
+    commit(repo, "Create legacy recap fixture baseline")
+    checkpoint = git(repo, "rev-parse", "HEAD")
+    if rewritten:
+        git(repo, "switch", "-c", "fixture-rewritten")
+        write(repo, "rewritten-only.txt", "This checkpoint is on another branch.\n")
+        commit(repo, "Create non-ancestor checkpoint")
+        checkpoint = git(repo, "rev-parse", "HEAD")
+        git(repo, "switch", "fixture-main")
+        write(repo, "current-only.txt", "Current branch continues independently.\n")
+        commit(repo, "Advance current branch past rewritten boundary")
+    head = git(repo, "rev-parse", "HEAD")
+    head_line = f"- **HEAD:** `{head}` on {branch_line}"
+    content = f"""# Project Recap
+
+## Scope
+
+- **Repository / worktree:** {name}
+- **Branch:** fixture-main
+- **Committed range:** Existing legacy checkpoint
+- **Working-tree inclusion:** Committed and uncommitted work are separate.
+- **Context consulted:** None
+
+## 2026-10-01 — Legacy checkpoint entry
+
+- **Category:** documentation
+- **Status:** Completed
+- **What / why:** Existing legacy recap entry.
+- **Important files:**
+  - `README.md` — fixture evidence.
+- **Commits:** `{checkpoint}` — legacy checkpoint
+- **Impact:** Existing fixture history.
+- **Junior notes:** Preserve this entry.
+- **Verification:** not run
+
+## Current Point
+
+{head_line}
+- **Recap checkpoint:** `{checkpoint}`
+- **Pending committed history:** None
+- **Committed work:** Existing legacy history.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** Continue from checkpoint.
+
+<!-- recap-state
+last_commit: {checkpoint}
+last_updated: 2026-10-01
+-->
+"""
+    write(repo, "docs/recap.md", content)
+    commit(repo, "Seed clean tracked legacy recap")
+    (control / f"{name}.sha256").write_text(hashlib.sha256((repo / "docs/recap.md").read_bytes()).hexdigest() + "\n", encoding="ascii")
+    history_end = content.find("## Current Point")
+    (control / f"{name}.history.txt").write_text(content[:history_end], encoding="utf-8")
 
 
 def main() -> None:
@@ -141,7 +208,7 @@ def main() -> None:
     control.mkdir()
     seed_catchup(root)
     seed_backlog(root)
-    seed_recap(root)
+    seed_recap(root, control)
     (control / "README.txt").write_text("Fixture evidence and byte snapshots belong here, outside all Git repositories.\n", encoding="utf-8")
     print(root)
 

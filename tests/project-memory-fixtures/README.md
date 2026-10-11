@@ -96,6 +96,18 @@ Each check requires an exact full-hash queue shrinking by 100 and every processe
 python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures recap-no-new
 ```
 
+## Legacy recap branch and checkpoint boundaries
+
+Invoke recap once in each fixture below, then run its matching validator command from the source repository root:
+
+- `recap-legacy-branch-match`: infer `fixture-main` from the single `Current Point` HEAD line, adopt the clean tracked legacy recap, and preserve its existing history entry.
+- `recap-legacy-branch-missing`: the legacy HEAD line has no branch; preserve the output bytes and ask for direction.
+- `recap-legacy-branch-ambiguous`: competing legacy HEAD lines name different branches; preserve the output bytes.
+- `recap-legacy-branch-mismatch`: an unambiguous legacy branch differs from the current branch; preserve the output bytes.
+- `recap-rewritten-checkpoint`: its saved checkpoint exists on `fixture-rewritten` but is not an ancestor of `fixture-main`; preserve the output bytes and cursor.
+
+Example command: `python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures recap-legacy-branch-match`. Substitute each scenario name above. The control hashes are outside the Git fixtures.
+
 ## Scope
 
 The scripts generate fixtures and inspect post-invocation behavior; they do not execute the natural-language skill, mutate skills, or write into user projects. `arm-invalid` is the intentional user-edit simulation; the only other fixture Git mutation is the documented branch probe. No build, lint, test, or format command is needed to execute the skills.
