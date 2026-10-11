@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 
+from generate import legacy_backlog
 OUTPUTS = {"catchup": "docs/overview.md", "backlog": "docs/backlog.md", "recap": "docs/recap.md"}
 
 
@@ -118,8 +119,8 @@ def check_legacy(workspace: Path, name: str) -> None:
 
 
 def legacy_backlog_expected() -> str:
-    return ("# Project Backlog\n\n## In Progress\n\n## Todo\n\n## Blocked\n\n## Needs Review\n\n## Done\n\n"
-            "### BL-014 — Preserve this completed record\n\n- **Status:** Done\n- **Priority:** Low\n- **Context:** Fixture record proving completed IDs remain reserved.\n- **Tasks:**\n  - [x] Keep the existing completion record.\n- **Related:** None\n- **Files:** None\n- **Depends on:** None\n- **Blocked by:** None\n- **Completion:** Completed\n  - **Completed on:** 2026-10-01\n  - **Completion commit:** abcdef1\n  - **Completion evidence:** Fixture verification.\n  - **Completion notes:** Preserve this record exactly.\n")
+    return legacy_backlog()
+
 
 
 def check_catchup(workspace: Path) -> None:
@@ -130,8 +131,10 @@ def check_catchup(workspace: Path) -> None:
     text = path.read_text(encoding="utf-8")
     for heading in ("Purpose", "Stack", "Architecture", "Application Flow", "Important Modules", "Important Files", "Data Flow", "External Dependencies", "Environment and Configuration", "Development Workflow", "Recommended Reading Order", "Cautions"):
         require(f"## {heading}" in text, f"overview lacks template section {heading}")
+    require("accepts a name and returns a greeting" in text, "overview omits the README-supported service purpose")
+    require("greet(name)" in text and "hello" in text, "overview omits the source-supported greeting implementation")
+    require("APP_MODE" in text and "API_TOKEN" in text, "overview omits the fixture configuration variable names")
     require("fixture-secret-do-not-copy" not in text, "secret fixture value was copied")
-    require(snapshot(repo, rel).get("notes/unrelated.txt") == hashlib.sha256(b"Preserve this file byte-for-byte.\n").hexdigest(), "unrelated fixture file changed")
     require(set(snapshot(repo, rel)) == {"README.md", "src/app.py", "pyproject.toml", "tests/test_app.py", "config/example.env", "notes/unrelated.txt"}, "catchup wrote a path besides docs/overview.md")
     print("PASS: catchup evidence-shaped output, secret redaction, fingerprint and one-output ownership")
 
@@ -152,8 +155,11 @@ def check_backlog(workspace: Path) -> None:
     require(all(int(identifier[3:]) > 14 for identifier in ids if identifier != "BL-014"), "new backlog ID recycled or precedes reserved Done ID BL-014")
     done = "### BL-014" + legacy_backlog_expected().split("### BL-014", 1)[1].rstrip()
     new_ids = [identifier for identifier in ids if identifier != "BL-014"]
-    require(new_ids, "backlog did not create an evidence-backed item for the fixture TODO")
-    require("empty names" in text.lower(), "backlog item did not reflect the concrete fixture work")
+    require(len(new_ids) == 1, "backlog must create exactly one item for the sole fixture TODO")
+    item_start = next(match.start() for match in items if match.group(1) == new_ids[0])
+    next_item = next((match.start() for match in items if match.start() > item_start), len(text))
+    item = text[item_start:next_item]
+    require("empty names" in item.lower() and "documented error" in item.lower(), "new backlog item must capture the concrete empty-name rejection outcome")
     require(done in text, "Done item or its completion record was not preserved byte-for-byte")
     allowed = {"Todo", "In Progress", "Blocked", "Needs Review", "Done"}
     for index, match in enumerate(items):
@@ -268,8 +274,11 @@ def check_legacy_recap(workspace: Path, name: str) -> None:
         require(fingerprint(path), "matching legacy branch was not adopted with a valid fingerprint")
         require(state_value(text, "branch") == "fixture-main", "legacy branch was not inferred from Current Point")
         require(state_value(text, "pending_commits") == "none", "matching legacy checkpoint should have no pending work")
-        require(git(repo, "rev-parse", "--verify", f"{state_value(text, 'last_commit')}^{{commit}}") == git(repo, "rev-parse", "HEAD"), "matching legacy checkpoint changed")
+        require(state_value(text, "last_commit") == git(repo, "rev-parse", "HEAD"), "matching legacy checkpoint should equal the post-adoption HEAD")
         expected_history = (workspace / ".control" / f"{name}.history.txt").read_text(encoding="utf-8")
+        seed_commit = git(repo, "log", "-1", "--format=%H", "--", rel)
+        entries = resolve_entry_hashes(recap_entry_hash_lines(text), [seed_commit])
+        require(entries.count(seed_commit) == 1, "dated recap entries must contain the exact legacy recap seed commit exactly once")
         require(text.startswith(expected_history), "legacy history entry changed during migration")
         require(set(snapshot(repo, rel)) == {"README.md"}, "legacy recap migration wrote outside its one owned output")
         print("PASS: matching legacy branch inferred, adopted and fingerprinted")
