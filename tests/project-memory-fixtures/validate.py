@@ -175,28 +175,32 @@ def check_backlog(workspace: Path) -> None:
     next_item = next((match.start() for match in items if match.start() > item_start), len(text))
     item = text[item_start:next_item]
     new_status = re.search(r"(?m)^- \*\*Status:\*\* (.+)$", item)
--    require(new_status is not None and new_status.group(1) == "Todo", "the sole new item for the unstarted empty-name TODO must remain Todo")
-+    require(new_status is not None and new_status.group(1) == "Todo", "the sole new item for the unstarted empty-name TODO must remain Todo")
+    require(new_status is not None and new_status.group(1) == "Todo", "the sole new item for the unstarted empty-name TODO must remain Todo")
     required_fields = {
         "Priority": "Low",
         "Context": None,
         "Tasks": None,
         "Related": "None",
-        "Files": "None",
+        "Files": None,
         "Depends on": "None",
         "Blocked by": "None",
         "Completion": "Not completed",
     }
     for field, value in required_fields.items():
-        match = re.search(rf"(?m)^- \*\*{re.escape(field)}:\*\* (.*)$", item)
+        match = re.search(rf"(?m)^- \*\*{re.escape(field)}:\*\*(?: (.*))?$", item)
         require(match is not None, f"new backlog item lacks required {field} field")
         if value is not None:
             require(match.group(1) == value, f"new backlog item has incorrect {field}")
     require(bool(re.search(r"(?m)^- \*\*Context:\*\* .+src/app\.py.+TODO.+documented error", item, re.IGNORECASE)), "new backlog context must cite the concrete TODO and documented-error outcome")
     tasks_match = re.search(r"(?ms)^- \*\*Tasks:\*\*\n((?:  - \[[ xX]\] .+\n?)+)", item)
     require(tasks_match is not None and 1 <= len(re.findall(r"(?m)^  - \[[ xX]\] .+$", tasks_match.group(1))) <= 5, "new backlog item must have a finite task checklist")
-    for field in ("Related", "Depends on", "Blocked by", "Files"):
+    files_match = re.search(r"(?m)^- \*\*Files:\*\* (.+)$", item)
+    file_paths = re.findall(r"`([^`]+)`", files_match.group(1) if files_match else "")
+    require(len(file_paths) == 2 and set(file_paths) == {"src/app.py", "tests/test_app.py"}, "new backlog Files must cite only fixture-supported source/test files")
+    for field in ("Related", "Depends on", "Blocked by"):
         require(re.search(rf"(?m)^- \*\*{field}:\*\* None$", item) is not None, f"new backlog item has unsupported {field}")
+    for field in ("Completed on", "Completion commit", "Completion evidence", "Completion notes"):
+        require(re.search(rf"(?m)^  - \*\*{field}:\*\* —$", item) is not None, f"unfinished item must leave {field} unset")
     require(done in text, "Done item or its completion record was not preserved byte-for-byte")
     allowed = {"Todo", "In Progress", "Blocked", "Needs Review", "Done"}
     for index, match in enumerate(items):
