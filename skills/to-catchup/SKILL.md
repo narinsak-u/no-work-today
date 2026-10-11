@@ -32,10 +32,18 @@ Create or update one evidence-based onboarding document at `docs/overview.md`. T
 5. Fill every template section with concise, repository-backed guidance. Distinguish observed facts from inferences, cite relevant paths and commands, and mark unknowns instead of filling gaps from convention or intuition.
 6. In `Environment and Configuration`, document variable names, loading locations, safe defaults, and setup requirements without exposing secret values. If a file contains secrets, describe its role without reproducing its contents.
 7. In `Development Workflow`, include only commands supported by repository evidence. State when testing, deployment, or another workflow could not be verified.
-8. Before writing, inspect the owned file's Git state. In a Git repository, run `git status --short -- docs/overview.md`; if it reports staged or unstaged changes, stop and ask how to merge them rather than overwrite them. In a non-Git repository, preserve existing content explicitly while incorporating the new evidence.
-9. Write the result to `docs/overview.md`. Do not modify, rename, or delete unrelated documentation, source files, configuration, or generated artifacts.
-10. Re-read the result and check that it explains flows before inventories, covers all template sections, contains no secret values or unsupported claims, and leaves unrelated files untouched. Confirm the owned-file guard passed before writing.
+8. Before writing, validate ownership of the existing output. Keep one hidden HTML comment at the end of `docs/overview.md` in this exact form, with LF line endings:
+   ```md
+   <!-- skill-state
+   output_sha256: <64 lowercase hexadecimal characters>
+   -->
+   ```
+   The `output_sha256` line is SHA-256 of the exact UTF-8 bytes of the entire document with only that metadata line and its line ending omitted. Retain the comment delimiters, every other metadata field, and every other byte and line ending unchanged; do not normalize content. On first write, write the completed overview followed by this comment and calculate the fingerprint by this rule.
+   - If an existing output contains the `output_sha256` field, recompute the hash using that rule. If it is well-formed and matches, it is safe for this skill to update even when Git reports staged or unstaged changes to `docs/overview.md`. After every permitted update, recalculate and replace the fingerprint. If the field is malformed, duplicated, or mismatched, stop without writing and ask how to preserve or merge the edits.
+   - If an existing output has no `output_sha256` field, adopt it only when it is a clean, tracked legacy file in a Git repository: verify it is tracked and `git status --short -- docs/overview.md` reports no staged or unstaged changes. Add the fingerprint with the next complete update. If it is untracked, modified, or in a non-Git repository, stop without writing and ask for direction; do not treat non-Git content as clean.
+9. Write the result to `docs/overview.md` only after the ownership check permits the update. Preserve the existing overview structure and all unrelated files; do not modify, rename, or delete unrelated documentation, source files, configuration, or generated artifacts.
+10. Re-read the result and check that it explains flows before inventories, covers all template sections, contains no secret values or unsupported claims, has a valid fingerprint, and leaves unrelated files untouched. Confirm the ownership guard passed before writing.
 
 ## Completion Criteria
 
-A catchup is complete when `docs/overview.md` exists, follows the local template, explains how the system works before enumerating files, covers architecture, flow, modules, configuration, development workflow, reading order, and cautions, and explicitly identifies evidence gaps. The only intended repository output is `docs/overview.md` (plus the `docs/` directory when it had to be created).
+A catchup is complete when `docs/overview.md` exists, follows the local template, explains how the system works before enumerating files, covers architecture, flow, modules, configuration, development workflow, reading order, and cautions, explicitly identifies evidence gaps, and has a valid hidden fingerprint. The only intended repository output is `docs/overview.md` (plus the `docs/` directory when it had to be created).
