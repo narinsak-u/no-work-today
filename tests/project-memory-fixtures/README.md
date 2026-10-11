@@ -16,14 +16,23 @@ The workspace must be absent or empty. Generation creates isolated catchup/backl
 
 ## Repeatable fingerprints and owned outputs
 
-For `catchup-valid` and `backlog-valid`, invoke the relevant skill once and then a second time without staging or committing its owned document. After **each** invocation run:
+For `catchup-valid` and `backlog-valid`, invoke the relevant skill once without staging or committing its owned document, then run its first check. Arm changed evidence, invoke the skill again without staging or committing the output, and run the second check:
 
 ```sh
+# For each scenario, invoke the skill once, then:
 python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures catchup-valid
+python3 tests/project-memory-fixtures/validate.py arm-repeat /tmp/project-memory-skill-fixtures catchup-valid
+# Invoke catchup again, then:
+python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures catchup-valid
+
+# Repeat the same sequence for backlog-valid:
+python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures backlog-valid
+python3 tests/project-memory-fixtures/validate.py arm-repeat /tmp/project-memory-skill-fixtures backlog-valid
+# Invoke backlog again, then:
 python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures backlog-valid
 ```
 
-The check requires a valid fingerprint and dirty owned output, all expected content invariants, and no other fixture paths written. Backlog begins with a clean tracked legacy file containing completed `BL-014`; catchup begins without an output. Catchup assertions require the README-supported service purpose, the `greet(name)`/`hello` implementation, both documented configuration names, and absence of the fixture secret.
+The first check has first-run expectations and saves the initial output digest. `arm-repeat` changes evidence but not the owned document, and saves both that digest and an input snapshot under `.control/`. The second check requires valid fingerprint, changed output bytes, still-uncommitted ownership, and unchanged non-output fixture paths since arming. Catchup adds a documented whitespace-trimming behavior; backlog adds a second concrete TODO and requires exactly one additional evidence-backed item while preserving the original item and completed `BL-014`.
 
 For an invalid fingerprint, first invoke catchup in `catchup-invalid` or backlog in `backlog-invalid`, then arm an intentional user edit:
 
@@ -53,7 +62,7 @@ Example: `python3 tests/project-memory-fixtures/validate.py check /tmp/project-m
 
 ## Backlog assertions
 
-The `backlog-valid` check asserts all five status sections, exactly one new item for the sole unstarted empty-name TODO (including its documented-error outcome and required `Todo` status), unique IDs above the existing completed `BL-014`, the unchanged Done completion record, allowed priorities/statuses, and section/status placement. It also verifies one-output ownership.
+The `backlog-valid` first check asserts exactly one new item for the sole unstarted empty-name TODO. After `arm-repeat`, the second check requires exactly two new items: the first stable item (including its documented-error outcome and required `Todo` status) and exactly one item for the added long-name TODO. Both checks require unique IDs above completed `BL-014`, the unchanged Done completion record, allowed priorities/statuses, and section/status placement; the second also verifies the original generated item survives.
 
 ## Recap: bounded history, resume, and branch binding
 

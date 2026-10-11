@@ -7,6 +7,7 @@ import sys
 import hashlib
 from pathlib import Path
 import re
+import json
 import subprocess
 
 from generate import git, legacy_backlog
@@ -82,6 +83,35 @@ def arm_invalid(workspace: Path, name: str) -> None:
     print(f"Edited {rel}; now invoke the skill and run check {name}")
 
 
+def repeat_control(workspace: Path, name: str) -> Path:
+    return workspace / ".control" / f"{name}.repeat.json"
+
+
+def arm_repeat(workspace: Path, name: str) -> None:
+    require(name in ("catchup-valid", "backlog-valid"), "repeat arming is only supported for valid catchup/backlog fixtures")
+    skill = name.split("-", 1)[0]
+    rel = OUTPUTS[skill]
+    repo = workspace / name
+    output = repo / rel
+    control = repeat_control(workspace, name)
+    require(output.is_file() and has_valid_fingerprint(output), "invoke and check the skill once before arming its repeat")
+    require(not control.exists(), f"{name} repeat was already armed")
+    first_digest = hashlib.sha256(output.read_bytes()).hexdigest()
+    if skill == "catchup":
+        app = repo / "src/app.py"
+        app.write_text(app.read_text(encoding="utf-8").replace('return f"hello, {name}"', 'return f"hello, {name.strip()}"'), encoding="utf-8")
+        readme = repo / "README.md"
+        readme.write_text(readme.read_text(encoding="utf-8").rstrip() + " The greeting trims surrounding whitespace from names.\\n", encoding="utf-8")
+    else:
+        app = repo / "src/app.py"
+        app.write_text(app.read_text(encoding="utf-8").rstrip() + "\\n\\n# TODO: Reject names longer than 80 characters with a documented error.\\n", encoding="utf-8")
+    control.write_text(json.dumps({
+        "first_output_sha256": first_digest,
+        "armed_inputs": snapshot(repo, rel),
+    }, sort_keys=True, indent=2) + "\\n", encoding="utf-8")
+    print(f"Armed changed evidence for {name}; invoke the skill again, then check it")
+
+
 def check_repeat(workspace: Path, name: str) -> None:
     skill = name.split("-", 1)[0]
     rel = OUTPUTS[skill]
@@ -91,8 +121,14 @@ def check_repeat(workspace: Path, name: str) -> None:
     require(has_valid_fingerprint(path), f"{rel} has no valid single fingerprint")
     state = git(repo, "status", "--porcelain", "--", rel)
     require(bool(state), f"{rel} is not dirty; fixture must prove repeat update while uncommitted")
-    print(f"PASS: valid fingerprint, dirty owned output, {rel} present")
-
+    control = repeat_control(workspace, name)
+    if not control.exists():
+        control.write_text(json.dumps({"first_output_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}, sort_keys=True) + "\\n", encoding="utf-8")
+        print(f"PASS: first-run output fingerprint and dirty ownership, {rel} present")
+        return
+    evidence = json.loads(control.read_text(encoding="utf-8"))
+    require(hashlib.sha256(path.read_bytes()).hexdigest() != evidence["first_output_sha256"], f"{rel} bytes did not change after armed evidence changed")
+    require(snapshot(repo, rel) == evidence["armed_inputs"], "non-output fixture paths changed after repeat evidence was armed")
 
 def check_invalid(workspace: Path, name: str) -> None:
     skill = name.split("-", 1)[0]
@@ -146,8 +182,12 @@ def check_catchup(workspace: Path) -> None:
     require(path.is_file() and has_valid_fingerprint(path), "overview missing or fingerprint invalid")
     text = path.read_text(encoding="utf-8")
     require_overview_headings(text, "overview")
-    require("accepts a name and returns a greeting" in text, "overview omits the README-supported service purpose")
-    require("greet(name)" in text and "hello" in text, "overview omits the source-supported greeting implementation")
+    repeated = repeat_control(workspace, "catchup-valid").exists()
+    if repeated:
+        require("trims surrounding whitespace" in text, "second overview omits the changed whitespace-trimming behavior")
+    else:
+        require("accepts a name and returns a greeting" in text, "overview omits the README-supported service purpose")
+        require("greet(name)" in text and "hello" in text, "overview omits the source-supported greeting implementation")
     require("APP_MODE" in text and "API_TOKEN" in text, "overview omits the fixture configuration variable names")
     require("fixture-secret-do-not-copy" not in text, "secret fixture value was copied")
     require(set(snapshot(repo, rel)) == {"README.md", "src/app.py", "pyproject.toml", "tests/test_app.py", "config/example.env", "notes/unrelated.txt"}, "catchup wrote a path besides docs/overview.md")
@@ -169,8 +209,12 @@ def check_backlog(workspace: Path) -> None:
     require(len(ids) == len(set(ids)), "backlog IDs are not unique")
     require(all(int(identifier[3:]) > 14 for identifier in ids if identifier != "BL-014"), "new backlog ID recycled or precedes reserved Done ID BL-014")
     done = "### BL-014" + legacy_backlog_expected().split("### BL-014", 1)[1].rstrip()
+    repeated = repeat_control(workspace, "backlog-valid").exists()
     new_ids = [identifier for identifier in ids if identifier != "BL-014"]
-    require(len(new_ids) == 1, "backlog must create exactly one item for the sole fixture TODO")
+    require(len(new_ids) == (2 if repeated else 1), "backlog must preserve the first generated item and add exactly one item for the added fixture TODO on repeat")
+    if repeated:
+        require("BL-015" in new_ids, "first generated backlog item ID BL-015 was not preserved")
+        require(any("80 characters" in text[match.start(): next((other.start() for other in items if other.start() > match.start()), len(text))] for match in items if match.group(1) != "BL-014"), "second backlog item does not cite the added long-name TODO")
     item_start = next(match.start() for match in items if match.group(1) == new_ids[0])
     next_item = next((match.start() for match in items if match.start() > item_start), len(text))
     item = text[item_start:next_item]
@@ -360,13 +404,16 @@ def check_branch_mismatch(workspace: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
     arm = sub.add_parser("arm-invalid"); arm.add_argument("workspace", type=Path); arm.add_argument("scenario")
+    repeat = sub.add_parser("arm-repeat"); repeat.add_argument("workspace", type=Path); repeat.add_argument("scenario")
     check = sub.add_parser("check"); check.add_argument("workspace", type=Path); check.add_argument("scenario")
     args = parser.parse_args()
     workspace = args.workspace.expanduser().resolve()
     if args.command == "arm-invalid":
         arm_invalid(workspace, args.scenario)
+        return
+    if args.command == "arm-repeat":
+        arm_repeat(workspace, args.scenario)
         return
     name = args.scenario
     if name in ("catchup-valid", "backlog-valid"):
