@@ -53,7 +53,7 @@ Example: `python3 tests/project-memory-fixtures/validate.py check /tmp/project-m
 
 ## Backlog assertions
 
-The `backlog-valid` check asserts all five status sections, exactly one new item for the sole empty-name TODO (including its documented-error outcome), unique IDs above the existing completed `BL-014`, the unchanged Done completion record, allowed priorities/statuses, and section/status placement. It also verifies one-output ownership.
+The `backlog-valid` check asserts all five status sections, exactly one new item for the sole unstarted empty-name TODO (including its documented-error outcome and required `Todo` status), unique IDs above the existing completed `BL-014`, the unchanged Done completion record, allowed priorities/statuses, and section/status placement. It also verifies one-output ownership.
 
 ## Recap: bounded history, resume, and branch binding
 

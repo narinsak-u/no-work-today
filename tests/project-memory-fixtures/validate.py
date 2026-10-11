@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import hashlib
 from pathlib import Path
 import re
@@ -156,7 +157,8 @@ def check_backlog(workspace: Path) -> None:
     item_start = next(match.start() for match in items if match.group(1) == new_ids[0])
     next_item = next((match.start() for match in items if match.start() > item_start), len(text))
     item = text[item_start:next_item]
-    require("empty names" in item.lower() and "documented error" in item.lower(), "new backlog item must capture the concrete empty-name rejection outcome")
+    new_status = re.search(r"(?m)^- \*\*Status:\*\* (.+)$", item)
+    require(new_status is not None and new_status.group(1) == "Todo", "the sole new item for the unstarted empty-name TODO must remain Todo")
     require(done in text, "Done item or its completion record was not preserved byte-for-byte")
     allowed = {"Todo", "In Progress", "Blocked", "Needs Review", "Done"}
     for index, match in enumerate(items):
