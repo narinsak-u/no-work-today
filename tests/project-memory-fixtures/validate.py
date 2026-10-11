@@ -194,6 +194,8 @@ def check_backlog(workspace: Path) -> None:
     require(bool(re.search(r"(?m)^- \*\*Context:\*\* .+src/app\.py.+TODO.+documented error", item, re.IGNORECASE)), "new backlog context must cite the concrete TODO and documented-error outcome")
     tasks_match = re.search(r"(?ms)^- \*\*Tasks:\*\*\n((?:  - \[[ xX]\] .+\n?)+)", item)
     require(tasks_match is not None and 1 <= len(re.findall(r"(?m)^  - \[[ xX]\] .+$", tasks_match.group(1))) <= 5, "new backlog item must have a finite task checklist")
+    task_lines = re.findall(r"(?m)^  - \[[ xX]\] (.+)$", tasks_match.group(1) if tasks_match else "")
+    require(all("empty name" in task.lower().replace("-", " ") for task in task_lines), "backlog task checklist contains work unrelated to the fixture TODO")
     files_match = re.search(r"(?m)^- \*\*Files:\*\* (.+)$", item)
     file_paths = re.findall(r"`([^`]+)`", files_match.group(1) if files_match else "")
     require(len(file_paths) == 2 and set(file_paths) == {"src/app.py", "tests/test_app.py"}, "new backlog Files must cite only fixture-supported source/test files")
