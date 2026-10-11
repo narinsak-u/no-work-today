@@ -96,6 +96,15 @@ def check_legacy(workspace: Path, name: str) -> None:
     path = repo / rel
     if name.endswith("-tracked"):
         require(path.is_file() and fingerprint(path), f"clean tracked legacy {rel} was not adopted with a valid fingerprint")
+        text = path.read_text(encoding="utf-8")
+        if skill == "catchup":
+            for heading in ("Purpose", "Stack", "Architecture", "Application Flow", "Important Modules", "Important Files", "Data Flow", "External Dependencies", "Environment and Configuration", "Development Workflow", "Recommended Reading Order", "Cautions"):
+                require(f"## {heading}" in text, f"adopted overview lacks template section {heading}")
+            require("accepts a name and returns a greeting" in text, "adopted overview lost the existing project purpose")
+            require("fixture-secret-do-not-copy" not in text, "secret fixture value was copied into adopted overview")
+        else:
+            done = "### BL-014" + legacy_backlog_expected().split("### BL-014", 1)[1].rstrip()
+            require(done in text, "adopted backlog did not preserve BL-014 and its completion record byte-for-byte")
     else:
         expected = "# Legacy overview\n\nKeep this unmarked content.\n" if skill == "catchup" else legacy_backlog_expected()
         if name == "catchup-legacy-modified":
