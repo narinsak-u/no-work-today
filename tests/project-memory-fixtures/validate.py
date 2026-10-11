@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""Assert observable outputs and Git state after manual skill invocations."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+OUTPUTS = {"catchup": "docs/overview.md", "backlog": "docs/backlog.md", "recap": "docs/recap.md"}
+
+
+def git(repo: Path, *args: str, check: bool = True) -> str:
+    result = subprocess.run(["git", *args], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if check and result.returncode:
+        raise AssertionError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def require(ok: bool, message: str) -> None:
+    if not ok:
+        raise AssertionError(message)
+
+
+def fingerprint(path: Path) -> bool:
+    data = path.read_bytes()
+    matches = list(re.finditer(rb"(?m)^output_sha256: ([0-9a-f]{64})\r?\n", data))
+    if len(matches) != 1:
+        return False
+    match = matches[0]
+    expected = match.group(1).decode("ascii")
+    actual = hashlib.sha256(data[:match.start()] + data[match.end():]).hexdigest()
+    return actual == expected and data.count(b"<!--") == 1 and data.count(b"-->") == 1
+
+
+def snapshot(repo: Path, exclude: str) -> dict[str, str]:
+    result = {}
+    for path in repo.rglob("*"):
+        if not path.is_file() or ".git" in path.parts or path.relative_to(repo).as_posix() == exclude:
+            continue
+        result[path.relative_to(repo).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
+
+
+def arm_invalid(workspace: Path, name: str) -> None:
+    skill = name.split("-", 1)[0]
+    rel = OUTPUTS[skill]
+    repo = workspace / name
+    path = repo / rel
+    require(path.is_file(), f"Invoke {skill} once before arming invalid fingerprint case {name}")
+    with path.open("ab") as output:
+        output.write(b"\n<!-- fixture user edit: preserve these exact bytes -->\n")
+    evidence = workspace / ".control" / f"{name}.sha256"
+    evidence.write_text(hashlib.sha256(path.read_bytes()).hexdigest() + "\n", encoding="ascii")
+    print(f"Edited {rel}; now invoke the skill and run check {name}")
+
+
+def check_repeat(workspace: Path, name: str) -> None:
+    skill = name.split("-", 1)[0]
+    rel = OUTPUTS[skill]
+    repo = workspace / name
+    path = repo / rel
+    require(path.is_file(), f"Missing owned output {rel}; invoke the skill")
+    require(fingerprint(path), f"{rel} has no valid single fingerprint")
+    state = git(repo, "status", "--porcelain", "--", rel)
+    require(bool(state), f"{rel} is not dirty; fixture must prove repeat update while uncommitted")
+    print(f"PASS: valid fingerprint, dirty owned output, {rel} present")
+
+
+def check_invalid(workspace: Path, name: str) -> None:
+    skill = name.split("-", 1)[0]
+    rel = OUTPUTS[skill]
+    repo = workspace / name
+    path = repo / rel
+    expected = (workspace / ".control" / f"{name}.sha256").read_text(encoding="ascii").strip()
+    require(hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"{rel} changed after invalid fingerprint; user bytes must remain exact")
+    require(not fingerprint(path), f"{rel} unexpectedly validates despite deliberate edit")
+    print(f"PASS: invalid fingerprint preserved all bytes in {rel}")
+
+
+
+
+def check_legacy(workspace: Path, name: str) -> None:
+    skill = name.split("-", 1)[0]
+    rel = OUTPUTS[skill]
+    repo = workspace / name
+    path = repo / rel
+    if name.endswith("-tracked"):
+        require(path.is_file() and fingerprint(path), f"clean tracked legacy {rel} was not adopted with a valid fingerprint")
+    else:
+        expected = "# Legacy overview\n\nKeep this unmarked content.\n" if skill == "catchup" else legacy_backlog_expected()
+        if name == "catchup-legacy-modified":
+            expected = "# Legacy overview\n\nUser modification.\n"
+        if name == "backlog-legacy-modified":
+            expected += "\nUser edit to legacy backlog.\n"
+        require(path.read_text(encoding="utf-8") == expected, f"refused legacy {rel} was overwritten or changed")
+    if name.endswith("-untracked"):
+        require(not git(repo, "ls-files", "--error-unmatch", rel, check=False), "untracked legacy output became tracked")
+    print(f"PASS: legacy adoption/refusal behavior for {name}")
+
+
+def legacy_backlog_expected() -> str:
+    return ("# Project Backlog\n\n## In Progress\n\n## Todo\n\n## Blocked\n\n## Needs Review\n\n## Done\n\n"
+            "### BL-014 — Preserve this completed record\n\n- **Status:** Done\n- **Priority:** Low\n- **Context:** Fixture record proving completed IDs remain reserved.\n- **Tasks:**\n  - [x] Keep the existing completion record.\n- **Related:** None\n- **Files:** None\n- **Depends on:** None\n- **Blocked by:** None\n- **Completion:** Completed\n  - **Completed on:** 2026-10-01\n  - **Completion commit:** abcdef1\n  - **Completion evidence:** Fixture verification.\n  - **Completion notes:** Preserve this record exactly.\n")
+
+
+def check_catchup(workspace: Path) -> None:
+    repo = workspace / "catchup-valid"
+    rel = OUTPUTS["catchup"]
+    path = repo / rel
+    require(path.is_file() and fingerprint(path), "overview missing or fingerprint invalid")
+    text = path.read_text(encoding="utf-8")
+    for heading in ("Purpose", "Stack", "Architecture", "Application Flow", "Important Modules", "Important Files", "Data Flow", "External Dependencies", "Environment and Configuration", "Development Workflow", "Recommended Reading Order", "Cautions"):
+        require(f"## {heading}" in text, f"overview lacks template section {heading}")
+    require("fixture-secret-do-not-copy" not in text, "secret fixture value was copied")
+    require(snapshot(repo, rel).get("notes/unrelated.txt") == hashlib.sha256(b"Preserve this file byte-for-byte.\n").hexdigest(), "unrelated fixture file changed")
+    require(set(snapshot(repo, rel)) == {"README.md", "src/app.py", "pyproject.toml", "tests/test_app.py", "config/example.env", "notes/unrelated.txt"}, "catchup wrote a path besides docs/overview.md")
+    print("PASS: catchup evidence-shaped output, secret redaction, fingerprint and one-output ownership")
+
+
+def check_backlog(workspace: Path) -> None:
+    repo = workspace / "backlog-valid"
+    rel = OUTPUTS["backlog"]
+    path = repo / rel
+    require(path.is_file() and fingerprint(path), "backlog missing or fingerprint invalid")
+    text = path.read_text(encoding="utf-8")
+    sections = ["In Progress", "Todo", "Blocked", "Needs Review", "Done"]
+    positions = [text.find(f"## {section}") for section in sections]
+    require(all(position >= 0 for position in positions), "backlog must retain all five sections")
+    require("## Item format" not in text, "authoring guidance leaked into generated backlog")
+    items = list(re.finditer(r"(?m)^### (BL-\d{3}) — .+$", text))
+    ids = [match.group(1) for match in items]
+    require(len(ids) == len(set(ids)), "backlog IDs are not unique")
+    require(all(int(identifier[3:]) > 14 for identifier in ids if identifier != "BL-014"), "new backlog ID recycled or precedes reserved Done ID BL-014")
+    done = "### BL-014" + legacy_backlog_expected().split("### BL-014", 1)[1].rstrip()
+    new_ids = [identifier for identifier in ids if identifier != "BL-014"]
+    require(new_ids, "backlog did not create an evidence-backed item for the fixture TODO")
+    require("empty names" in text.lower(), "backlog item did not reflect the concrete fixture work")
+    require(done in text, "Done item or its completion record was not preserved byte-for-byte")
+    allowed = {"Todo", "In Progress", "Blocked", "Needs Review", "Done"}
+    for index, match in enumerate(items):
+        end = items[index + 1].start() if index + 1 < len(items) else len(text)
+        block = text[match.start():end]
+        status = re.search(r"(?m)^- \*\*Status:\*\* (.+)$", block)
+        require(status is not None and status.group(1) in allowed, f"{match.group(1)} has invalid status")
+        section = max((p, s) for p, s in zip(positions, sections) if p < match.start())[1]
+        require(section == status.group(1), f"{match.group(1)} status does not match its section")
+        require(re.search(r"(?m)^- \*\*Priority:\*\* (High|Medium|Low)$", block), f"{match.group(1)} has invalid/missing priority")
+    require(set(snapshot(repo, rel)) == {"README.md", "src/app.py", "pyproject.toml", "tests/test_app.py", "config/example.env", "notes/unrelated.txt"}, "backlog wrote a path besides docs/backlog.md")
+    print("PASS: stable unique IDs, preserved Done record, five sections, valid status placement, one-output ownership")
+
+
+def state_value(text: str, name: str) -> str:
+    match = re.search(rf"(?m)^{re.escape(name)}: (.*)$", text)
+    require(match is not None, f"recap state lacks {name}")
+    return match.group(1)
+
+
+def selected_hashes(repo: Path) -> list[str]:
+    all_hashes = git(repo, "rev-list", "--topo-order", "--reverse", "HEAD").splitlines()
+    return all_hashes[-1000:]
+
+
+def recap_entry_hash_lines(text: str) -> list[str]:
+    current = text.find("## Current Point")
+    history = text[:current if current >= 0 else len(text)]
+    return re.findall(r"(?m)^- \*\*Commits:\*\* (.+)$", history)
+
+
+def resolve_entry_hashes(lines: list[str], selected: list[str]) -> list[str]:
+    resolved = []
+    for line in lines:
+        for token in re.findall(r"\b[0-9a-f]{7,40}\b", line):
+            matches = [commit_id for commit_id in selected if commit_id.startswith(token)]
+            if len(matches) == 1:
+                resolved.append(matches[0])
+    return resolved
+
+
+def check_recap(workspace: Path, expected_count: int) -> None:
+    repo = workspace / "recap-large-history"
+    path = repo / OUTPUTS["recap"]
+    require(path.is_file() and fingerprint(path), "recap missing or fingerprint invalid")
+    text = path.read_text(encoding="utf-8")
+    selected = selected_hashes(repo)
+    require(int(git(repo, "rev-list", "--count", "HEAD")) > 1000, "fixture must exceed 1,000 commits")
+    require(1 <= expected_count <= 1000 and expected_count % 100 == 0, "progress checkpoints must be a multiple of 100 from 100 through 1,000")
+    processed = selected[:expected_count]
+    pending = selected[expected_count:]
+    state_pending = state_value(text, "pending_commits")
+    require(state_pending == (" ".join(pending) if pending else "none"), "pending_commits is not the exact oldest-first remaining hash queue")
+    last = state_value(text, "last_commit")
+    require(processed[-1].startswith(last) and len(last) >= 7, "checkpoint does not resolve to the final represented batch hash")
+    require(state_value(text, "history_head") == git(repo, "rev-parse", "HEAD"), "history_head not reconciled to pinned HEAD")
+    require(state_value(text, "branch") == "fixture-main", "recap state branch binding is wrong")
+    entry_hashes = resolve_entry_hashes(recap_entry_hash_lines(text), selected)
+    require(entry_hashes == processed, "dated entries do not represent exactly the processed commits once, oldest-first")
+    require("Pending committed history" in text, "Current Point does not expose pending history")
+    current = text[text.find("## Current Point"):]
+    pending_field = re.search(r"(?ms)^- \*\*Pending committed history:\*\* (.*?)(?=^- \*\*|\Z)", current)
+    require(pending_field is not None, "Current Point lacks pending-history details")
+    require(re.search(rf"(?<!\d){len(pending)}(?!\d)", pending_field.group(1)), "Current Point pending count is wrong")
+    visible = re.findall(r"\b[0-9a-f]{40}\b", pending_field.group(1))
+    require(visible == pending[:100], "Current Point does not list the exact next up-to-100 full pending hashes")
+    require("older" in text.lower() and ("outside" in text.lower() or "omitted" in text.lower()), "older-than-1,000 history omission is invisible")
+    if expected_count == 100:
+        require("1000" in text, "initial selected-window size is not visible")
+        (workspace / ".control" / "recap-initial.sha256").write_text(hashlib.sha256(path.read_bytes()).hexdigest() + "\n", encoding="ascii")
+    if expected_count == 1000:
+        history_end = text.find("## Current Point")
+        (workspace / ".control" / "recap-history.sha256").write_text(hashlib.sha256(text[:history_end].encode("utf-8")).hexdigest() + "\n", encoding="ascii")
+    print(f"PASS: recap checkpoint {expected_count}/1000; {len(pending)} exact pending hashes; no gap/duplicate; branch and omission visible")
+
+
+def check_recap_no_new(workspace: Path) -> None:
+    repo = workspace / "recap-large-history"
+    path = repo / OUTPUTS["recap"]
+    require(path.is_file() and fingerprint(path), "recap missing or fingerprint invalid after no-new run")
+    text = path.read_text(encoding="utf-8")
+    expected_history = (workspace / ".control" / "recap-history.sha256").read_text(encoding="ascii").strip()
+    history_end = text.find("## Current Point")
+    require(history_end >= 0 and hashlib.sha256(text[:history_end].encode("utf-8")).hexdigest() == expected_history, "no-new run changed or duplicated historical entries")
+    require(state_value(text, "last_commit") == git(repo, "rev-parse", "HEAD"), "no-new run changed the completed checkpoint")
+    require(state_value(text, "pending_commits") == "none", "no-new run has unexpected pending commits")
+    require(state_value(text, "branch") == "fixture-main", "no-new run changed branch binding")
+    print("PASS: no-new-commit run preserved history/checkpoint with empty queue and valid fingerprint")
+
+
+def check_branch_mismatch(workspace: Path) -> None:
+    repo = workspace / "recap-large-history"
+    path = repo / OUTPUTS["recap"]
+    before = (workspace / ".control" / "recap-initial.sha256").read_text(encoding="ascii").strip()
+    require(hashlib.sha256(path.read_bytes()).hexdigest() == before, "recap changed after branch mismatch; preserve bytes and baseline")
+    require(git(repo, "branch", "--show-current") == "fixture-other", "run branch mismatch check while on fixture-other")
+    print("PASS: recap bytes unchanged on branch mismatch")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    arm = sub.add_parser("arm-invalid"); arm.add_argument("workspace", type=Path); arm.add_argument("scenario")
+    check = sub.add_parser("check"); check.add_argument("workspace", type=Path); check.add_argument("scenario")
+    args = parser.parse_args()
+    workspace = args.workspace.expanduser().resolve()
+    if args.command == "arm-invalid":
+        arm_invalid(workspace, args.scenario)
+        return
+    name = args.scenario
+    if name in ("catchup-valid", "backlog-valid"):
+        check_repeat(workspace, name)
+        (check_catchup if name.startswith("catchup") else check_backlog)(workspace)
+    elif name.endswith("invalid"):
+        check_invalid(workspace, name)
+    elif name.startswith(("catchup-legacy", "backlog-legacy")):
+        check_legacy(workspace, name)
+    elif name.startswith("recap-progress-"):
+        try:
+            check_recap(workspace, int(name.removeprefix("recap-progress-")))
+        except ValueError:
+            parser.error("recap progress scenario must end in a number")
+    elif name == "recap-no-new":
+        check_recap_no_new(workspace)
+    elif name == "recap-branch-mismatch":
+        check_branch_mismatch(workspace)
+    else:
+        parser.error(f"unknown scenario: {name}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (AssertionError, OSError, subprocess.CalledProcessError) as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        sys.exit(1)
