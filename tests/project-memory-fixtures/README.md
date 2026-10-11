@@ -23,7 +23,7 @@ python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skil
 python3 tests/project-memory-fixtures/validate.py check /tmp/project-memory-skill-fixtures backlog-valid
 ```
 
-The check requires a valid fingerprint and dirty owned output, all expected content invariants, and no other fixture paths written. Backlog begins with a clean tracked legacy file containing completed `BL-014`; catchup begins without an output.
+The check requires a valid fingerprint and dirty owned output, all expected content invariants, and no other fixture paths written. Backlog begins with a clean tracked legacy file containing completed `BL-014`; catchup begins without an output. Catchup assertions require the README-supported service purpose, the `greet(name)`/`hello` implementation, both documented configuration names, and absence of the fixture secret.
 
 For an invalid fingerprint, first invoke catchup in `catchup-invalid` or backlog in `backlog-invalid`, then arm an intentional user edit:
 
@@ -45,7 +45,7 @@ The byte digest is saved only in `.control/`. The edit must remain invalid and b
 
 Invoke the applicable skill once in each named fixture, then run `check` for it:
 
-- `catchup-legacy-tracked`, `backlog-legacy-tracked`: clean tracked, unmarked output; adopt and fingerprint it. The catchup overview must retain the README-supported project purpose, all template sections, and redact the fixture secret; backlog must preserve the completed `BL-014` record.
+- `catchup-legacy-tracked`, `backlog-legacy-tracked`: clean tracked, unmarked output; adopt and fingerprint it. The catchup overview must retain the README-supported service purpose and redact the fixture secret; backlog must preserve the completed `BL-014` record.
 - `catchup-legacy-untracked`, `backlog-legacy-untracked`: untracked, unmarked output; preserve its bytes.
 - `catchup-legacy-modified`, `backlog-legacy-modified`: tracked but modified, unmarked output; preserve its bytes.
 - `catchup-legacy-nongit`, `backlog-legacy-nongit`: existing unmarked output outside Git; preserve its bytes.
@@ -53,7 +53,7 @@ Example: `python3 tests/project-memory-fixtures/validate.py check /tmp/project-m
 
 ## Backlog assertions
 
-The `backlog-valid` check asserts all five status sections, unique IDs above the existing completed `BL-014`, the unchanged Done completion record, allowed priorities/statuses, and section/status placement. It also verifies one-output ownership.
+The `backlog-valid` check asserts all five status sections, exactly one new item for the sole empty-name TODO (including its documented-error outcome), unique IDs above the existing completed `BL-014`, the unchanged Done completion record, allowed priorities/statuses, and section/status placement. It also verifies one-output ownership.
 
 ## Recap: bounded history, resume, and branch binding
 
@@ -132,7 +132,7 @@ This existing unmarked recap is outside any Git worktree. The check requires its
 
 Invoke recap once in each fixture below, then run its matching validator command from the source repository root:
 
-- `recap-legacy-branch-match`: infer `fixture-main` from the single `Current Point` HEAD line, adopt the clean tracked legacy recap, and preserve its existing history entry.
+- `recap-legacy-branch-match`: infer `fixture-main` from the single `Current Point` HEAD line, adopt the clean tracked legacy recap, preserve its existing history entry, and assert the recap-seed commit appears exactly once in dated entries with no pending commits and checkpoint equal to post-adoption `HEAD`.
 - `recap-legacy-branch-missing`: the legacy HEAD line has no branch; preserve the output bytes and ask for direction.
 - `recap-legacy-branch-ambiguous`: competing legacy HEAD lines name different branches; preserve the output bytes.
 - `recap-legacy-branch-mismatch`: an unambiguous legacy branch differs from the current branch; preserve the output bytes.
