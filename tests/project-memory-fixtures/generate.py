@@ -53,7 +53,7 @@ def seed_catchup(root: Path) -> None:
         init_repo(repo)
         seed_project(repo)
         if name.startswith("catchup-legacy"):
-            write(repo, "docs/overview.md", "# Legacy overview\n\nKeep this tracked legacy content.\n")
+            write(repo, "docs/overview.md", "# Legacy overview\n\nKeep this unmarked content.\n")
             if name in ("catchup-legacy-tracked", "catchup-legacy-modified"):
                 commit(repo, "Add legacy overview")
             if name == "catchup-legacy-modified":
