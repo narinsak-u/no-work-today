@@ -135,6 +135,31 @@ def seed_recap(root: Path, control: Path) -> None:
     seed_legacy_recap(root, control, "recap-legacy-branch-ambiguous", "fixture-main\n- **HEAD:** `fixture-old` on fixture-old")
 
     seed_legacy_recap(root, control, "recap-rewritten-checkpoint", "fixture-main", rewritten=True)
+    seed_recap_ownership(root, control)
+
+
+def seed_recap_ownership(root: Path, control: Path) -> None:
+    invalid = root / "recap-invalid"
+    init_repo(invalid)
+    write(invalid, "README.md", "# Invalid fingerprint ownership fixture\n")
+    commit(invalid, "Create invalid fingerprint fixture")
+
+    for name in ("recap-legacy-untracked", "recap-legacy-modified"):
+        repo = root / name
+        init_repo(repo)
+        write(repo, "README.md", f"# {name}\n")
+        content = "# Legacy recap\n\nPreserve these exact unmarked bytes.\n"
+        write(repo, "docs/recap.md", content)
+        if name.endswith("-modified"):
+            commit(repo, "Add tracked legacy recap")
+            write(repo, "docs/recap.md", "# Legacy recap\n\nUser modification; preserve exact bytes.\n")
+        (control / f"{name}.sha256").write_text(
+            hashlib.sha256((repo / "docs/recap.md").read_bytes()).hexdigest() + "\n", encoding="ascii"
+        )
+        if name.endswith("-modified"):
+            (control / f"{name}.dirty.txt").write_text(
+                git(repo, "status", "--porcelain", "--", "docs/recap.md") + "\n", encoding="utf-8"
+            )
 
 
 def seed_legacy_recap(root: Path, control: Path, name: str, branch_line: str, rewritten: bool = False) -> None:
