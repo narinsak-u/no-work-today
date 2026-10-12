@@ -99,10 +99,16 @@ for unsafe in \
   'AUTH_SECRET_KEY: abc123' \
   'APP_TOKEN=abc123' \
   'AWS_SECRET_ACCESS_KEY=abc123' \
+  'DB_PASSWORD=[actualSecret]' \
+  'APP_TOKEN=<actualSecret>' \
   'mongodb+srv://user:secret123@cluster.example/app' \
   'rediss://user:secret123@cache.example/0' \
   'amqps://user:secret123@queue.example/' \
   'postgresql://user:secret123@db.example/app' \
+  'postgresql://user:realpass%3A[REDACTED]@db.example/app' \
+  'postgresql://user%3Arealpass:[REDACTED]@db.example/app' \
+  'postgresql://user:[actualSecret]@db.example/app' \
+  'postgresql://user%3A[actualSecret]%40db.example/app' \
   'postgres://user:secret123@db.example/app' \
   'mysql://user:p%40ssword@db.example/app' \
   'mongodb://user:secret123@db.example/app' \
@@ -131,7 +137,11 @@ TOKEN_ENDPOINT=https://web.example/path
 SERVICE_API_KEY=[REDACTED]
 APP_TOKEN: [example-token]
 DB_PASSWORD=<redacted>
+SERVICE_API_KEY=[REDACTED PASSWORD]
+APP_TOKEN: [example token]
 postgresql://user:[REDACTED]@db.example/app
+postgresql://user:[REDACTED PASSWORD]@db.example/app
+postgresql://user%3A[example password]%40db.example/app
 The application reads PASSWORD from its environment but this overview has no value.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
