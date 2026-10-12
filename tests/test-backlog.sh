@@ -29,6 +29,9 @@ printf '// TODO: revoke github_pat_12345678x\n' > "$root/src/github-pat.go"
 printf '// TODO: document DB_PASSWORD=[REDACTED VALUE]\n' > "$root/src/redacted-value.go"
 printf '// TODO: rotate DB_PASSWORD=[REDACTED VALUE]still-secret\n' > "$root/src/redaction-suffix.go"
 printf '// TODO: rotate DB_PASSWORD=[REDACTED VALUE],production-secret\n' > "$root/src/redaction-comma.go"
+printf '// TODO: rotate DB_PASSWORD=[REDACTED], fixture_credential\n' > "$root/src/redaction-comma-space.go"
+printf '// TODO: rotate DB_PASSWORD=[REDACTED];actual-secret\n' > "$root/src/redaction-semicolon.go"
+printf '// TODO: use DB_PASSWORD="[REDACTED]" in examples\n' > "$root/src/quoted-placeholder.go"
 cp "$root/src/credential.go" "$fixture/credential-before"
 cp "$root/src/database.go" "$fixture/database-before"
 
@@ -43,8 +46,12 @@ for file in stripe-token.go github-token.go github-pat.go; do
 done
 [[ "$candidates" == *'src/redaction-suffix.go:1:'*'sensitive TODO'* ]] || exit 1
 [[ "$candidates" == *'src/redaction-comma.go:1:'*'sensitive TODO'* ]] || exit 1
+for file in redaction-comma-space.go redaction-semicolon.go; do
+  [[ "$candidates" == *"src/$file:1:"*'sensitive TODO'* ]] || exit 1
+done
+[[ "$candidates" == *'src/quoted-placeholder.go:1:'*'DB_PASSWORD="[REDACTED]"'* ]] || exit 1
 [[ "$candidates" == *'src/config-names.go:1:'*'DB_PASSWORD name'* && "$candidates" == *'src/placeholder.go:1:'*'[REDACTED]'* && "$candidates" == *'src/redacted-value.go:1:'*'[REDACTED VALUE]'* ]] || exit 1
-[[ "$candidates" != *'top-secret-credential'* && "$candidates" != *'connection-secret'* && "$candidates" != *'mysql://'* && "$candidates" != *'sk_live_12345678x'* && "$candidates" != *'ghp_12345678x'* && "$candidates" != *'github_pat_12345678x'* && "$candidates" != *'still-secret'* && "$candidates" != *'production-secret'* ]] || exit 1
+[[ "$candidates" != *'top-secret-credential'* && "$candidates" != *'connection-secret'* && "$candidates" != *'mysql://'* && "$candidates" != *'sk_live_12345678x'* && "$candidates" != *'ghp_12345678x'* && "$candidates" != *'github_pat_12345678x'* && "$candidates" != *'still-secret'* && "$candidates" != *'production-secret'* && "$candidates" != *'fixture_credential'* && "$candidates" != *'actual-secret'* ]] || exit 1
 cmp -s "$fixture/credential-before" "$root/src/credential.go"
 cmp -s "$fixture/database-before" "$root/src/database.go"
 mkdir -p "$fixture/standalone"
@@ -243,6 +250,10 @@ invalid 's|Payment capture failure in src/payments.go.|API_KEY=[REDACTED VALUE] 
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=[actually secret value] in examples|' 'unrecognized bracketed credential'
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=[REDACTED VALUE]still-secret|' 'redaction prefix followed by credential'
 invalid 's|Payment capture failure in src/payments.go.|TODO: rotate DB_PASSWORD=[REDACTED VALUE],production-secret|' 'redaction comma followed by credential'
+invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD=[REDACTED], fixture_credential|' 'redaction comma and spaced credential'
+invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD=[REDACTED];actual-secret|' 'redaction semicolon followed by credential'
+invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD="[REDACTED]"|' 'matching quoted placeholder' accept
+invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD=[REDACTED]; APP_TOKEN=[masked]|' 'separate safe named assignments' accept
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=<redacted> and DB_PASSWORD name|' 'angle-bracket redaction and name' accept
 invalid 's|Payment capture failure in src/payments.go.|Connect to https://service@api.example.test/tasks|' 'URL without password' accept
 cp "$fixture/valid.md" "$root/docs/backlog.md"

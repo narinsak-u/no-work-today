@@ -11,8 +11,12 @@ for heading in '# Project Overview' '## Purpose' '## Stack' '## Architecture' '#
 done
 if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|github_pat_)[A-Za-z0-9_-]{8,}' "$file" ||
   LC_ALL=C awk '
-    function placeholder(value) {
-      if (value ~ /^["\047]/) value = substr(value, 2, length(value) - 2)
+    function placeholder(value, quote) {
+      if (value ~ /^["\047]/) {
+        quote = substr(value, 1, 1)
+        if (substr(value, length(value), 1) != quote) return 0
+        value = substr(value, 2, length(value) - 2)
+      }
       return value ~ /^\[(REDACTED|PLACEHOLDER|EXAMPLE|SAMPLE|DUMMY|YOUR)([ _-]+[[:alnum:]_ -]+)?\]$/ ||
         value ~ /^<(REDACTED|PLACEHOLDER|EXAMPLE|SAMPLE|DUMMY|YOUR)([ _-]+[[:alnum:]_ -]+)?>$/
     }
@@ -24,8 +28,8 @@ if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|
         if (match(rest, /^(\[[^]]+\]|<[^>]+>)/)) {
           value = substr(rest, RSTART, RLENGTH)
           suffix = substr(rest, RLENGTH + 1)
-          if (suffix ~ /^,/ &&
-              suffix !~ /^,[[:space:]]*([[:alnum:]_]*_)?(PASSWORD|API_KEY|ACCESS_TOKEN|SECRET_KEY|TOKEN|AWS_SECRET_ACCESS_KEY)[[:space:]]*[:=]/)
+          if (suffix ~ /^[,;]/ &&
+              suffix !~ /^[,;][[:space:]]*([[:alnum:]_]*_)?(PASSWORD|API_KEY|ACCESS_TOKEN|SECRET_KEY|TOKEN|AWS_SECRET_ACCESS_KEY)[[:space:]]*[:=]/)
             bad = 1
           if (suffix !~ /^([[:space:],;]|$)/) value = value suffix
         } else if (match(rest, /^[^[:space:];]+/)) {

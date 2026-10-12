@@ -116,6 +116,8 @@ sign_candidate() {
 for detail in \
   'DB_PASSWORD=redRecapPassword29' \
   'DB_PASSWORD=[REDACTED]:redRecapSuffix29' \
+  'DB_PASSWORD=[REDACTED];actual-secret' \
+  'DB_PASSWORD=[REDACTED], fixture_credential' \
   'SERVICE_API_KEY=[masked]!redRecapSuffix29' \
   'AWS_SECRET_ACCESS_KEY=redRecapAws29' \
   'SERVICE_API_KEY: redRecapApiKey29' \
@@ -131,6 +133,7 @@ for detail in \
   'postgresql://reader:[REDACTED]:redRecapSuffix29@db.example.test/app' \
   'postgresql://reader:realpass%3A[REDACTED]@db.example.test/app' \
   'postgresql://reader%3Arealpass%3A[REDACTED]@db.example.test/app' \
+  'postgresql://reader%3Afixture_credential%40db%2Eexample/app' \
   'mysql://reader:redRecapMysql29@db.example.test/app' \
   'mongodb://reader:redRecapMongo29@db.example.test/app' \
   'redis://reader:redRecapRedis29@db.example.test/0' \
@@ -141,7 +144,7 @@ for detail in \
   'https://reader%40tenant:redRecapEncoded29@service.example.test/api'
 do
   sign_candidate "$detail"
-  if rejection="$(bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/candidate-recap" 2>&1)"; then
+  if rejection="$(ulimit -t 3; bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/candidate-recap" 2>&1)"; then
     echo 'Validator accepted a signed credential-bearing recap' >&2; exit 1
   fi
   [[ "$rejection" == *'possible secret value'* && "$rejection" != *"$detail"* ]] ||
@@ -153,6 +156,7 @@ for detail in \
   'DB_PASSWORD and SERVICE_API_KEY are configuration names, not values.' \
   'DB_PASSWORD=[REDACTED] and SERVICE_TOKEN: [redacted] are placeholders.' \
   'DB_PASSWORD=[REDACTED] harmless context follows.' \
+  'DB_PASSWORD=[REDACTED]; SERVICE_API_KEY=[masked] are placeholders.' \
   'DB_PASSWORD="[REDACTED]" harmless context follows.' \
   'SERVICE_API_KEY=[masked]   extra prose.' \
   'postgresql://[USER]:[PASSWORD]@db.example.test/app is a redacted example.' \

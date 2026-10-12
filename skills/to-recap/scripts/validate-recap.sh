@@ -49,7 +49,8 @@ if LC_ALL=C awk '
       if (substr(tail, 1, 1) != quote) return 0
       tail=substr(tail, 2)
     }
-    return tail == "" || tail ~ /^[[:space:]]/
+    return tail == "" || tail ~ /^[[:space:]]/ ||
+      tail ~ /^[,;][[:space:]]*(([[:alnum:]_]+_)?(aws_secret_access_key|password|api_key|access_token|secret_key|token))[[:space:]]*[:=]/
   }
   {
     line=tolower($0)
@@ -61,8 +62,8 @@ if LC_ALL=C awk '
     rest=line
     while (match(rest, /(^|[^[:alnum:]_])([[:alnum:]_]+_)?(aws_secret_access_key|password|api_key|access_token|secret_key|token)[[:space:]]*[:=][[:space:]]*/)) {
       value=substr(rest, RSTART+RLENGTH)
+      rest=value
       if (value !~ /^$/ && !placeholder(value)) bad=1
-      rest=substr(rest, RSTART+RLENGTH)
     }
 
     # Match authority user-info, not ordinary URLs or unrelated prose.
@@ -72,9 +73,14 @@ if LC_ALL=C awk '
       remaining=substr(rest, RSTART+RLENGTH)
       sub(/^[^:]+:\/\//, "", authority)
       userinfo=authority
-      if (authority ~ /@[^@]+$/) sub(/@[^@]+$/, "", userinfo)
-      else if (authority ~ /%40[^%]+$/) sub(/%40[^%]+$/, "", userinfo)
-      else userinfo=""
+      scan=authority
+      offset=at=0
+      while (match(scan, /@|%40/)) {
+        at=offset+RSTART
+        offset+=RSTART+RLENGTH-1
+        scan=substr(scan, RSTART+RLENGTH)
+      }
+      userinfo=(at ? substr(authority, 1, at-1) : "")
       if (match(userinfo, /(:|%3a)/)) {
         userinfo=substr(userinfo, RSTART+RLENGTH)
         if (userinfo != "" && !placeholder(userinfo)) bad=1

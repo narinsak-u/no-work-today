@@ -229,6 +229,8 @@ for unsafe in \
   'APP_TOKEN=<actualSecret>' \
   'DB_PASSWORD=[REDACTED]actualSecret' \
   'DB_PASSWORD=[REDACTED],realpass' \
+  'DB_PASSWORD=[REDACTED];actual-secret' \
+  'DB_PASSWORD="[REDACTED]x' \
   'DB_PASSWORD=[REDACTED], realpass' \
   'APP_TOKEN=<redacted>actualSecret' \
   'DB_PASSWORD=[actual Secret]' \
@@ -272,6 +274,8 @@ APP_TOKEN: [example-token]
 DB_PASSWORD=<redacted>
 SERVICE_API_KEY=[REDACTED PASSWORD]
 DB_PASSWORD=[REDACTED], APP_TOKEN=[EXAMPLE TOKEN]
+DB_PASSWORD="[REDACTED]"
+DB_PASSWORD=[REDACTED]; APP_TOKEN=[EXAMPLE TOKEN]
 APP_TOKEN: [example token]
 postgresql://user:[REDACTED]@db.example/app
 postgresql://user:[REDACTED PASSWORD]@db.example/app
