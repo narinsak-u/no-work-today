@@ -72,6 +72,8 @@ The agent runs each installed skill's read-only shell helpers to gather bounded 
 ## Safety and evidence rules 🛡️
 
 - Never copy secrets into generated documentation. Do not include tokens, passwords, private keys, credentials, or sensitive connection strings; record configuration names and safe placeholders instead.
+- The backlog TODO helper suppresses recognizable credential-bearing source lines and reports bounded safe-lead omissions. Inspect reported locations locally before treating discovery as complete; never copy sensitive text into generated output.
+- Validators reject recognizable credential patterns, but cannot prove a document contains no secrets; review generated content before sharing.
 - Ground examples and generated claims in repository files and observed Git evidence. When evidence is missing or ambiguous, record `Unknown` or `Needs verification` instead of guessing.
 - Keep responsibilities separate: `to-catchup` owns architectural understanding, `to-recap` owns completed-work history, and `to-backlog` owns unfinished work.
 

@@ -8,6 +8,9 @@ All notable changes to this repository are documented here. Releases follow sema
 - Suppressed standalone credential tokens in backlog TODO helper output while retaining safe lead locations, and accepted only recognized multiword redaction labels in credential assignments.
 - Hardened overview validation against URL user-info separator masking, bracketed credentials with appended values, and comma-delimited credential tails while preserving named redaction examples.
 - Recognize indented Cargo dependency tables and mixed-case Poetry dependency names when deriving catchup framework hints, without treating unrelated manifest fields as dependencies.
+- Reject recap drafts that advance the checkpoint unless every selected commit appears exactly once in dated work entries.
+- Report per-file and global omissions of safe backlog TODO leads separately from suppressed credential-bearing leads.
+- Include nested App Router page/layout entrypoint candidates under `app` or `src/app` while excluding private folders and non-route extensions.
 - Made catchup and backlog updates repeat-safe with integrity fingerprints and conservative legacy-file adoption.
 - Made recap initial coverage the latest 100 commits and complete checkpoint-to-HEAD updates in bounded history batches, with no partial checkpoint advance.
 - Set `disable-model-invocation: true` for all project-memory skills.
