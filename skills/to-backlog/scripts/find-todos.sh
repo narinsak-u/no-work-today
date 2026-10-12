@@ -21,7 +21,12 @@ while IFS= read -r -d '' path; do
   LC_ALL=C awk -v path="$relative" '
     # Deliberately narrow: recognizable assignments and URL password user-info,
     # not an attempt to infer arbitrary secrets from source code.
-    function placeholder(value) {
+    function placeholder(value, quote) {
+      if (value ~ /^["\047]/) {
+        quote = substr(value, 1, 1)
+        if (substr(value, length(value), 1) != quote) return 0
+        value = substr(value, 2, length(value) - 2)
+      }
       return value ~ /^(\[redacted( (value|password|api key|secret key|access token|token))?\]|\[hidden\]|\[masked\]|<redacted>)$/
     }
     function sensitive(source,    lower, rest, value, url, authority, info, at, offset, colon, end) {
@@ -30,11 +35,15 @@ while IFS= read -r -d '' path; do
       rest = lower
       while (match(rest, /(^|[^[:alnum:]_])(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)|aws_secret_access_key|authorization)[[:space:]]*[:=][[:space:]]*/)) {
         rest = substr(rest, RSTART + RLENGTH)
-        if (match(rest, /^\[[^]]+\]/) || match(rest, /^[^[:space:],;#]+/)) {
+        if (match(rest, /^(\[[^]]+\]|"[[^]]+\]"|\047[[^]]+\047)/) || match(rest, /^[^[:space:],;#]+/)) {
           value = substr(rest, 1, RLENGTH)
+          length_value = RLENGTH
           if (!placeholder(value)) return 1
-          if (value ~ /^\[/ && (substr(rest, RLENGTH + 1, 1) ~ /[^[:space:],;#]/ || substr(rest, RLENGTH + 1, 2) ~ /^,[^[:space:],;#]/)) return 1
-          rest = substr(rest, RLENGTH + 1)
+          suffix = substr(rest, length_value + 1)
+          if (suffix ~ /^[,;]/ &&
+              suffix !~ /^[,;][[:space:]]*(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)|aws_secret_access_key|authorization)[[:space:]]*[:=]/) return 1
+          if (suffix !~ /^([[:space:],;#]|$)/) return 1
+          rest = suffix
         }
       }
       rest = lower
