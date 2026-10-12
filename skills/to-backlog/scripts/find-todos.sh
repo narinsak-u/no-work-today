@@ -72,20 +72,40 @@ while IFS= read -r -d '' path; do
           sub(/\r$/, "", text)
           gsub(/\t/, " ", text)
           if (length(text) > 240) text = substr(text, 1, 240) "..."
-          candidates[++matches] = path ":" NR ":" text
+          candidates[++matches] = "C" path "\034" NR "\034" text
+        } else {
+          if (!omitted++) first_omitted = NR
         }
       }
     }
     END {
-      for (i = 1; i <= matches; i++) print "C" candidates[i]
+      for (i = 1; i <= matches; i++) print candidates[i]
+      if (omitted) print "O" path "\034" first_omitted "\034" omitted
       if (suppressed) print "R" path ":" first ": [" suppressed " sensitive TODO leads suppressed]"
     }
   ' "$path"
-done | awk '
-  substr($0, 1, 1) == "C" { if (++safe <= 120) print substr($0, 2); next }
-  substr($0, 1, 1) == "R" { if (++redactions <= 20) print substr($0, 2) }
+done | awk -F "\034" '
+  substr($1, 1, 1) == "C" {
+    if (++safe <= 120) print substr($1, 2) ":" $2 ":" $3
+    else if (safe == 121) { first_global_path = substr($1, 2); first_global_line = $2 }
+    next
+  }
+  substr($1, 1, 1) == "O" {
+    path = substr($1, 2)
+    if (++notices <= 20) {
+      printf "%s:%s: [%d safe TODO lead%s omitted by per-file 100 candidate limit]\n", path, $2, $3, ($3 == 1 ? "" : "s")
+    } else {
+      if (notices == 21) { first_quiet_path = path; first_quiet_line = $2 }
+      quiet_safe += $3
+    }
+    next
+  }
+  substr($1, 1, 1) == "R" { if (++redactions <= 20) print substr($1, 2) }
   END {
-    if (safe > 120) printf "... %d additional candidates omitted; narrow the scan before interpreting\n", safe - 120
+    if (safe > 120)
+      printf "%s:%s: [%d safe TODO lead%s omitted by global 120 candidate limit]\n", first_global_path, first_global_line, safe - 120, (safe == 121 ? "" : "s")
+    if (notices > 20)
+      printf "... %d additional files with %d safe TODO leads omitted; first at %s:%s\n", notices - 20, quiet_safe, first_quiet_path, first_quiet_line
     if (redactions > 20) print "... additional sensitive TODO locations suppressed"
   }
 '
