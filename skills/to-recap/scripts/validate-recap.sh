@@ -42,14 +42,18 @@ if LC_ALL=C grep -Eiq '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(^|[^A-Z
 fi
 if [[ -n $selected ]]; then
   [[ -f $selected ]] || fail 'commit list missing'
-  # Check the entire selected set against the commit fields (never just one page).
+  # Account for every selected commit only in dated work-entry commit fields,
+  # not in Current Point or other prose (including lookalike commit fields).
   awk '
     FILENAME==ARGV[1] {
       if ($0 !~ /^[0-9a-f]+$/ || (length($0)!=40 && length($0)!=64) || want[$0]++) bad=1
       ids[++n]=$0
       next
     }
-    /^- \*\*Commits:\*\* / {
+    /^## / {
+      in_entry=($0 ~ /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] /)
+    }
+    in_entry && /^- \*\*Commits:\*\* / {
       parts=split($0, tokens, "`")
       for (i=2; i<parts; i+=2) {
         hash=tokens[i]
