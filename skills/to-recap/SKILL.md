@@ -1,6 +1,7 @@
 ---
 name: to-recap
 description: Use when updating project recaps from Git history and checkpoints, or documenting completed work, fixes, refactors, and their impact in docs/recap.md.
+disable-model-invocation: true
 ---
 
 # Incremental Project Recap

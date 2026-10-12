@@ -1,6 +1,7 @@
 ---
 name: to-backlog
 description: Use when tracking unfinished work, meaningful TODOs, blockers, priorities, or stable backlog IDs in docs/backlog.md.
+disable-model-invocation: true
 ---
 
 # Project Backlog

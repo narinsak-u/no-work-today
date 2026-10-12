@@ -1,6 +1,7 @@
 ---
 name: to-catchup
 description: Use when onboarding to unfamiliar repositories, documenting architecture and application flow, and creating docs/overview.md.
+disable-model-invocation: true
 ---
 
 # Repository Catchup
