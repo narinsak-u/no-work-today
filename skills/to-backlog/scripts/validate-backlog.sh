@@ -126,7 +126,7 @@ if ! LC_ALL=C awk '
       if (match(rest, /^\[[^]]+\]/) || match(rest, /^[^[:space:],;#]+/)) {
         value = substr(rest, 1, RLENGTH)
         if (!placeholder(value)) return 1
-        if (value ~ /^\[/ && substr(rest, RLENGTH + 1, 1) ~ /[^[:space:],;#]/) return 1
+        if (value ~ /^\[/ && (substr(rest, RLENGTH + 1, 1) ~ /[^[:space:],;#]/ || substr(rest, RLENGTH + 1, 2) ~ /^,[^[:space:],;#]/)) return 1
         rest = substr(rest, RLENGTH + 1)
       }
     }
