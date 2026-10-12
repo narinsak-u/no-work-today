@@ -11,6 +11,7 @@ LC_ALL=C awk '
   function finish_item(   field) {
     if (!item) return
     for (field in required) if (!seen_field[field]) error("item " item " missing " field)
+    if (tasks == 0) error("item " item " has no checklist task")
     if (status != section) error("item " item " status does not match section " section)
     if (section == "Done") {
       if (completion != "Completed") error("Done item " item " lacks completed state")
@@ -21,6 +22,7 @@ LC_ALL=C awk '
     for (field in seen_field) delete seen_field[field]
     for (field in values) delete values[field]
     item = ""
+    tasks = 0
   }
   BEGIN {
     split("Status|Priority|Context|Tasks|Related|Files|Depends on|Blocked by|Completion|Completed on|Completion commit|Completion evidence|Completion notes", keys, /[|]/)
@@ -58,6 +60,11 @@ LC_ALL=C awk '
       if (++ids[item] > 1) error("duplicate ID " item)
       next
     }
+    if ($0 == "- **Tasks:**" && item) {
+      if (++seen_field["Tasks"] > 1) error("duplicate Tasks field")
+      next
+    }
+    if ($0 ~ /^  - \[[ x]\] .+/ && item) { tasks++; next }
     if ($0 ~ /^ *- \*\*[^*]+:\*\* / && item) {
       label = $0
       sub(/^ *- \*\*/, "", label)
@@ -91,13 +98,15 @@ LC_ALL=C awk '
 expected="$(LC_ALL=C awk '/^output_sha256: / { sub(/\r$/, ""); print substr($0, 16) }' "$file")"
 if command -v sha256sum >/dev/null 2>&1; then
   actual="$(LC_ALL=C sed '/^output_sha256: /s/^output_sha256: [0-9a-f]\{64\}//' "$file" | sha256sum)"
+  actual="${actual%% *}"
 elif command -v shasum >/dev/null 2>&1; then
   actual="$(LC_ALL=C sed '/^output_sha256: /s/^output_sha256: [0-9a-f]\{64\}//' "$file" | shasum -a 256)"
+  actual="${actual%% *}"
 elif command -v openssl >/dev/null 2>&1; then
   actual="$(LC_ALL=C sed '/^output_sha256: /s/^output_sha256: [0-9a-f]\{64\}//' "$file" | openssl dgst -sha256)"
+  actual="${actual##* }"
 else
   printf 'Backlog: SHA-256 utility unavailable (sha256sum, shasum, or openssl required)\n' >&2
   exit 1
 fi
-actual="${actual##* }"
 [[ "$actual" == "$expected" ]] || { printf 'Backlog fingerprint mismatch: %s\n' "$file" >&2; exit 1; }
