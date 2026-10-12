@@ -76,6 +76,23 @@ stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared python")"
 [[ "$stack" == *'pyproject.toml|FastAPI'* && "$stack" == *'requirements.txt|FastAPI'* ]] || exit 1
 printf '[project.optional-dependencies]\napi = [\n  "fastapi[all]>=0.100",\n]\n' > "$fixture/declared python/pyproject.toml"
 [[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared python")" == *'pyproject.toml|FastAPI'* ]] || exit 1
+
+# TOML table indentation and dependency-name case do not change declared evidence.
+mkdir -p "$fixture/indented cargo" "$fixture/misleading indented cargo" "$fixture/poetry distribution" "$fixture/misleading poetry"
+printf '  [dependencies] # declared crates\naxum = "0.8"\n' > "$fixture/indented cargo/Cargo.toml"
+printf '[dependencies]\nother = "1"\n  [package.metadata] # not dependencies\naxum = "not a dependency"\n' > "$fixture/misleading indented cargo/Cargo.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/indented cargo")" == $'Cargo.toml|Rust\nCargo.toml|Axum' ]] || { printf 'Indented dependency table lost Axum\n' >&2; exit 1; }
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/misleading indented cargo")" == 'Cargo.toml|Rust' ]] || { printf 'Indented non-dependency table produced Axum\n' >&2; exit 1; }
+printf '[tool.poetry.group.api.dependencies]\nFastAPI = "^0.100"\n' > "$fixture/poetry distribution/pyproject.toml"
+printf '[tool.poetry.scripts]\nFastAPI = "app:main"\n[tool.other.dependencies]\nFastAPI = "^0.100"\n[tool.poetry.dependencies]\n# FastAPI = "^0.100"\n' > "$fixture/misleading poetry/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Mixed-case Poetry dependency lost FastAPI\n' >&2; exit 1; }
+printf '[tool.poetry.dependencies]\nFastAPI = "^0.100"\n' > "$fixture/poetry distribution/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Mixed-case direct Poetry dependency lost FastAPI\n' >&2; exit 1; }
+printf '  [project] # package metadata\n  dependencies = ["FastAPI>=0.100"]\n' > "$fixture/poetry distribution/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Indented commented project table lost FastAPI\n' >&2; exit 1; }
+printf '  [project.optional-dependencies] # extras\napi = ["fastapi>=0.100"]\n' > "$fixture/poetry distribution/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Indented commented optional project table lost FastAPI\n' >&2; exit 1; }
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/misleading poetry")" == 'pyproject.toml|Python' ]] || { printf 'Non-dependency Poetry keys produced FastAPI\n' >&2; exit 1; }
 printf '{"dependencies":{"next":"1.0.0"}}\n' > "$fixture/big workspace/.venv/package.json"
 printf '{"dependencies":{"next":"1.0.0"}}\n' > "$fixture/big workspace/generated/package.json"
 for ((n=1; n<=130; n++)); do

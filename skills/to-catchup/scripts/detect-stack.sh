@@ -84,9 +84,9 @@ find "$root" \( -type d \( -name .git -o -name .worktrees -o -name node_modules 
     Cargo.toml)
       printf '%s|Rust\n' "$relative"
       awk '
-        /^\[/ {
-          section = ($0 ~ /^\[(dependencies|dev-dependencies|build-dependencies)\][[:space:]]*(#.*)?$/ || $0 ~ /^\[target\..*\.dependencies\][[:space:]]*(#.*)?$/)
-          table = ($0 ~ /^\[(dependencies|dev-dependencies|build-dependencies)\.axum\][[:space:]]*(#.*)?$/ || $0 ~ /^\[target\..*\.dependencies\.axum\][[:space:]]*(#.*)?$/)
+        /^[[:space:]]*\[/ {
+          section = ($0 ~ /^[[:space:]]*\[(dependencies|dev-dependencies|build-dependencies)\][[:space:]]*(#.*)?$/ || $0 ~ /^[[:space:]]*\[target\..*\.dependencies\][[:space:]]*(#.*)?$/)
+          table = ($0 ~ /^[[:space:]]*\[(dependencies|dev-dependencies|build-dependencies)\.axum\][[:space:]]*(#.*)?$/ || $0 ~ /^[[:space:]]*\[target\..*\.dependencies\.axum\][[:space:]]*(#.*)?$/)
         }
         section && /^[[:space:]]*axum[[:space:]]*=/ { declared = 1 }
         table { declared = 1 }
@@ -114,14 +114,20 @@ find "$root" \( -type d \( -name .git -o -name .worktrees -o -name node_modules 
         }
         {
           line = declaration_line($0)
-          if (line ~ /^\[/) { section = line; array = 0 }
+          if (line ~ /^[[:space:]]*\[/) {
+            section = line
+            sub(/^[[:space:]]*/, "", section)
+            sub(/[[:space:]]*$/, "", section)
+            if (section !~ /^\[[^]]+\]$/) section = ""
+            array = 0
+          }
           if (section == "[project]" && line ~ /^[[:space:]]*dependencies[[:space:]]*=[[:space:]]*\[/) array = 1
           if (section == "[project.optional-dependencies]" && line ~ /^[[:space:]]*[A-Za-z0-9_-]+[[:space:]]*=[[:space:]]*\[/) array = 1
           if (array) {
             if (tolower(line) ~ /["\047]fastapi([[:space:]<>=!~\[]|["\047])/) declared = 1
             if (closed) array = 0
           }
-          if (section ~ /^\[tool\.poetry\.(group\.[^.]+\.)?dependencies\]/ && line ~ /^[[:space:]]*fastapi[[:space:]]*=/) declared = 1
+          if (section ~ /^\[tool\.poetry\.(group\.[^.]+\.)?dependencies\]$/ && tolower(line) ~ /^[[:space:]]*fastapi[[:space:]]*=/) declared = 1
         }
         END { if (declared) print "FastAPI" }
       ' "$manifest" | while IFS= read -r name; do printf '%s|%s\n' "$relative" "$name"; done
