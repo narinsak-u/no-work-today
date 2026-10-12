@@ -35,6 +35,47 @@ mkdir -p "$fixture/svelte only" "$fixture/big workspace/.venv" "$fixture/big wor
 printf '{"dependencies":{"svelte":"5.0.0"}}\n' > "$fixture/svelte only/package.json"
 svelte="$(bash "$skill/scripts/detect-stack.sh" "$fixture/svelte only")"
 [[ "$svelte" == *'|Svelte'* && "$svelte" != *'SvelteKit'* ]] || exit 1
+
+# A framework name in scripts, metadata, or an unrelated nested object is not a dependency.
+mkdir -p "$fixture/misleading manifest" "$fixture/declared framework"
+cat > "$fixture/misleading manifest/package.json" <<'JSON'
+{
+  "scripts": {"next": "echo next", "start": "echo \"react\": \"18\""},
+  "description": "Uses next",
+  "metadata": {"dependencies": {"vue": "3.0.0"}},
+  "dependencies": {"unrelated": "1.0.0"}
+}
+JSON
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/misleading manifest")"
+[[ "$stack" == 'package.json|JavaScript / TypeScript' ]] || { printf 'Non-dependencies produced framework hints: %s\n' "$stack" >&2; exit 1; }
+cat > "$fixture/declared framework/package.json" <<'JSON'
+{
+  "scripts": {"next": "echo next"},
+  "devDependencies": {
+    "next": "14.0.0",
+    "@sveltejs/kit": "2.0.0"
+  }
+}
+JSON
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared framework")"
+[[ "$stack" == *'package.json|Next.js'* && "$stack" == *'package.json|SvelteKit'* ]] || { printf 'Declared frameworks were missed: %s\n' "$stack" >&2; exit 1; }
+[[ "$stack" != *'|Svelte' ]] || { printf 'A different framework was inferred: %s\n' "$stack" >&2; exit 1; }
+
+mkdir -p "$fixture/ambiguous rust" "$fixture/declared rust" "$fixture/ambiguous python" "$fixture/declared python"
+printf '[package]\nname = "axum"\n[package.metadata]\naxum = "not a dependency"\n' > "$fixture/ambiguous rust/Cargo.toml"
+printf '[dependencies]\naxum = "0.8"\n' > "$fixture/declared rust/Cargo.toml"
+printf '[project]\ndescription = "fastapi"\ndependencies = [\n  # "fastapi" is not installed\n  "unrelated>=1"\n]\n[tool.other]\nfastapi = "not a dependency"\n' > "$fixture/ambiguous python/pyproject.toml"
+printf '# fastapi is not installed\nunrelated==1.0\n' > "$fixture/ambiguous python/requirements.txt"
+printf '[project]\ndependencies = ["fastapi>=0.100"]\n' > "$fixture/declared python/pyproject.toml"
+printf 'fastapi>=0.100\n' > "$fixture/declared python/requirements.txt"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/ambiguous rust")" == 'Cargo.toml|Rust' ]] || exit 1
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared rust")" == *'Cargo.toml|Axum'* ]] || exit 1
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/ambiguous python")"
+[[ "$stack" != *'|FastAPI'* && "$stack" == *'pyproject.toml|Python'* && "$stack" == *'requirements.txt|Python'* ]] || exit 1
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared python")"
+[[ "$stack" == *'pyproject.toml|FastAPI'* && "$stack" == *'requirements.txt|FastAPI'* ]] || exit 1
+printf '[project.optional-dependencies]\napi = [\n  "fastapi[all]>=0.100",\n]\n' > "$fixture/declared python/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared python")" == *'pyproject.toml|FastAPI'* ]] || exit 1
 printf '{"dependencies":{"next":"1.0.0"}}\n' > "$fixture/big workspace/.venv/package.json"
 printf '{"dependencies":{"next":"1.0.0"}}\n' > "$fixture/big workspace/generated/package.json"
 for ((n=1; n<=130; n++)); do
