@@ -77,14 +77,22 @@ limited="$(bash "$skill/scripts/find-todos.sh" "$fixture/limits")"
 [[ "$limited" == *'src with spaces/leads file.txt:101:FIXME: safe lead 99'* ]] || exit 1
 [[ "$limited" == *'src with spaces/leads file.txt:102:'*'1 safe TODO lead omitted'* ]] || exit 1
 [[ "$limited" != *'src with spaces/leads file.txt:102:FIXME: safe lead 100'* && "$limited" != *'never-print-this-value'* ]] || exit 1
-# The existing 120 global cap excludes safe matches after it; those losses
-# must be reported separately from the per-file loss and suppression.
+# The existing 120 global cap excludes one safe match regardless of whether
+# find visits the spaced directory or the global file first.
 for number in {1..21}; do printf 'TODO: global lead %d\n' "$number" >> "$fixture/limits/zz global file.txt"; done
 overflow="$(bash "$skill/scripts/find-todos.sh" "$fixture/limits")"
+[[ "$(printf '%s\n' "$overflow" | grep -Ec ':[0-9]+:(TODO|FIXME):')" -eq 120 ]] || exit 1
+[[ "$(printf '%s\n' "$overflow" | grep -c 'omitted by global 120 candidate limit')" -eq 1 ]] || exit 1
 [[ "$overflow" == *'zz global file.txt:20:TODO: global lead 20'* ]] || exit 1
-[[ "$overflow" != *'zz global file.txt:21:TODO: global lead 21'* ]] || exit 1
-[[ "$overflow" == *'zz global file.txt:21:'*'1'*'safe TODO lead omitted'*'global'* ]] || exit 1
-[[ "$overflow" == *'src with spaces/leads file.txt:102:'*'1 safe TODO lead omitted'* && "$overflow" == *'src with spaces/leads file.txt:1:'*'sensitive TODO'* ]] || exit 1
+if [[ "$overflow" == *'zz global file.txt:21:TODO: global lead 21'* ]]; then
+  [[ "$overflow" == *'src with spaces/leads file.txt:101: [1 safe TODO lead omitted by global 120 candidate limit]'* ]] || exit 1
+  [[ "$overflow" != *'src with spaces/leads file.txt:101:FIXME: safe lead 99'* ]] || exit 1
+else
+  [[ "$overflow" == *'zz global file.txt:21: [1 safe TODO lead omitted by global 120 candidate limit]'* ]] || exit 1
+  [[ "$overflow" == *'src with spaces/leads file.txt:101:FIXME: safe lead 99'* ]] || exit 1
+fi
+[[ "$overflow" == *'src with spaces/leads file.txt:102: [1 safe TODO lead omitted by per-file 100 candidate limit]'* ]] || exit 1
+[[ "$overflow" == *'src with spaces/leads file.txt:1: [1 sensitive TODO leads suppressed]'* ]] || exit 1
 [[ "$overflow" != *'never-print-this-value'* ]] || exit 1
 
 # Warnings themselves stay bounded when many files exceed their allowance.
@@ -93,7 +101,7 @@ for file in {01..22}; do
   for number in {1..101}; do printf 'TODO: ordinary lead %d\n' "$number" >> "$fixture/many limits/file $file.txt"; done
 done
 many="$(bash "$skill/scripts/find-todos.sh" "$fixture/many limits")"
-[[ "$many" == *'file 01.txt:101:'*'safe TODO lead omitted'* ]] || exit 1
+[[ "$(printf '%s\n' "$many" | grep -Ec '^file [0-9]{1,2}\.txt:101: \[1 safe TODO lead omitted by per-file 100 candidate limit\]$')" -eq 20 ]] || exit 1
 [[ "$many" == *'2 additional files'*'safe TODO leads omitted'* ]] || exit 1
 [[ "$(printf '%s\n' "$many" | grep -c 'safe TODO lead.*omitted')" -le 22 ]] || exit 1
 
