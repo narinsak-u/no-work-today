@@ -30,8 +30,8 @@ mkdir -p "$fixture/my project/app/(dashboard)" "$fixture/my project/src/app/blog
   "$fixture/my project/node_modules/app" "$fixture/my project/dist/app" \
   "$fixture/my project/build/app" "$fixture/my project/.git/app" "$fixture/my project/generated/app"
 for candidate in \
-  "app/page.tsx" "app/(dashboard)/layout.jsx" \
-  "src/app/page.js" "src/app/blog/layout.tsx" "src/index.ts"; do
+  "app/page.tsx" "app/(dashboard)/layout.jsx" "app/(dashboard)/page.ts" \
+  "src/app/page.js" "src/app/blog/layout.tsx" "src/app/blog/layout.ts" "src/index.ts"; do
   printf 'candidate\n' > "$fixture/my project/$candidate"
 done
 for excluded in node_modules dist build .git generated; do
@@ -60,8 +60,8 @@ done
 printf 'skip\n' > "$fixture/my project/apps/web/one/two/three/four/main.go"
 entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/my project")"
 for candidate in \
-  "app/page.tsx" "app/(dashboard)/layout.jsx" \
-  "src/app/page.js" "src/app/blog/layout.tsx" "src/index.ts" \
+  "app/page.tsx" "app/(dashboard)/layout.jsx" "app/(dashboard)/page.ts" \
+  "src/app/page.js" "src/app/blog/layout.tsx" "src/app/blog/layout.ts" "src/index.ts" \
   "src/main.rs" "apps/web/main.go" \
   "app/(dashboard)/reports/2026/quarter/one/page.tsx" \
   "src/app/blog/(archive)/year/month/day/layout.jsx"; do
@@ -80,10 +80,10 @@ for excluded in \
   [[ "$entrypoints" != *"$excluded"* ]] || { printf 'Invalid entrypoint reported: %s\n' "$excluded" >&2; exit 1; }
 done
 mkdir -p "$fixture/app router only/src/app/(marketing)"
-printf 'page\n' > "$fixture/app router only/src/app/(marketing)/page.tsx"
-printf 'layout\n' > "$fixture/app router only/src/app/layout.tsx"
+printf 'page\n' > "$fixture/app router only/src/app/(marketing)/page.ts"
+printf 'layout\n' > "$fixture/app router only/src/app/layout.ts"
 entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/app router only")"
-[[ "$entrypoints" == *"src/app/(marketing)/page.tsx"* && "$entrypoints" == *"src/app/layout.tsx"* ]] || exit 1
+[[ "$entrypoints" == *"src/app/(marketing)/page.ts"* && "$entrypoints" == *"src/app/layout.ts"* ]] || exit 1
 
 mkdir -p "$fixture/many routes/app"
 for ((n=1; n<=82; n++)); do
