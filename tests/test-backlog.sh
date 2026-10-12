@@ -23,6 +23,11 @@ printf '%s\n' '// TODO: remove postgresql://service%3Aconnection-secret%40db.exa
 printf '// TODO: rotate CI_ACCESS_TOKEN: top-secret-credential\n' > "$root/src/access-token.go"
 printf '// TODO: update DB_PASSWORD name in documentation\n' > "$root/src/config-names.go"
 printf '// TODO: use DB_PASSWORD=[REDACTED] in examples\n' > "$root/src/placeholder.go"
+printf '// TODO: rotate sk_live_12345678x\n' > "$root/src/stripe-token.go"
+printf '// FIXME: replace ghp_12345678x\n' > "$root/src/github-token.go"
+printf '// TODO: revoke github_pat_12345678x\n' > "$root/src/github-pat.go"
+printf '// TODO: document DB_PASSWORD=[REDACTED VALUE]\n' > "$root/src/redacted-value.go"
+printf '// TODO: rotate DB_PASSWORD=[REDACTED VALUE]still-secret\n' > "$root/src/redaction-suffix.go"
 cp "$root/src/credential.go" "$fixture/credential-before"
 cp "$root/src/database.go" "$fixture/database-before"
 
@@ -32,15 +37,19 @@ candidates="$(bash "$skill/scripts/find-todos.sh" "$root")"
 [[ "$candidates" == *'notes.txt:1:'*'migration blockers'* ]] || exit 1
 [[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* && "$candidates" != *'live-secret'* ]] || exit 1
 [[ "$candidates" == *'src/credential.go:1:'*'sensitive TODO'* && "$candidates" == *'src/database.go:1:'*'sensitive TODO'* && "$candidates" == *'src/encoded-url.go:1:'*'sensitive TODO'* && "$candidates" == *'src/access-token.go:1:'*'sensitive TODO'* ]] || exit 1
-[[ "$candidates" == *'src/config-names.go:1:'*'DB_PASSWORD name'* && "$candidates" == *'src/placeholder.go:1:'*'[REDACTED]'* ]] || exit 1
-[[ "$candidates" != *'top-secret-credential'* && "$candidates" != *'connection-secret'* && "$candidates" != *'mysql://'* ]] || exit 1
+for file in stripe-token.go github-token.go github-pat.go; do
+  [[ "$candidates" == *"src/$file:1:"*'sensitive TODO'* ]] || exit 1
+done
+[[ "$candidates" == *'src/redaction-suffix.go:1:'*'sensitive TODO'* ]] || exit 1
+[[ "$candidates" == *'src/config-names.go:1:'*'DB_PASSWORD name'* && "$candidates" == *'src/placeholder.go:1:'*'[REDACTED]'* && "$candidates" == *'src/redacted-value.go:1:'*'[REDACTED VALUE]'* ]] || exit 1
+[[ "$candidates" != *'top-secret-credential'* && "$candidates" != *'connection-secret'* && "$candidates" != *'mysql://'* && "$candidates" != *'sk_live_12345678x'* && "$candidates" != *'ghp_12345678x'* && "$candidates" != *'github_pat_12345678x'* && "$candidates" != *'still-secret'* ]] || exit 1
 cmp -s "$fixture/credential-before" "$root/src/credential.go"
 cmp -s "$fixture/database-before" "$root/src/database.go"
 mkdir -p "$fixture/standalone"
 cp -R "$skill" "$fixture/standalone/to-backlog"
 standalone="$(bash "$fixture/standalone/to-backlog/scripts/find-todos.sh" "$root")"
-[[ "$standalone" == *'src/credential.go:1:'*'sensitive TODO'* && "$standalone" == *'src/payments.go:1:'*'Add retries'* ]] || exit 1
-[[ "$standalone" != *'top-secret-credential'* ]] || exit 1
+[[ "$standalone" == *'src/credential.go:1:'*'sensitive TODO'* && "$standalone" == *'src/payments.go:1:'*'Add retries'* && "$standalone" == *'src/github-pat.go:1:'*'sensitive TODO'* ]] || exit 1
+[[ "$standalone" != *'top-secret-credential'* && "$standalone" != *'sk_live_12345678x'* && "$standalone" != *'ghp_12345678x'* && "$standalone" != *'github_pat_12345678x'* ]] || exit 1
 
 # Suppressed candidates must not occupy the per-file safe-lead allowance.
 mkdir -p "$fixture/budget"
@@ -137,7 +146,7 @@ reject() {
     printf 'Backlog validator accepted %s\n' "$1" >&2
     exit 1
   fi
-  if grep -Eqi 'top-secret-credential|connection-secret|live-secret' "$fixture/validation.stderr"; then
+  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret' "$fixture/validation.stderr"; then
     printf 'Backlog validator disclosed a suspected credential for %s\n' "$1" >&2
     exit 1
   fi
@@ -169,6 +178,9 @@ invalid 's/\*\*Priority:\*\* High/\*\*Priority:\*\* Urgent/' 'invalid priority'
 invalid 's/\*\*Status:\*\* Todo/\*\*Status:\*\* Done/' 'section/status mismatch'
 invalid 's/\*\*Completion evidence:\*\* Commit abc1234/\*\*Completion evidence:\*\* —/' 'lost completion evidence'
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=live-secret|' 'secret in backlog Context'
+for token in sk_live_12345678x ghp_12345678x github_pat_12345678x; do
+  invalid "s|Payment capture failure in src/payments.go.|Replace $token|" "standalone credential $token"
+done
 for key in PASSWORD DB_PASSWORD SERVICE_API_KEY CI_ACCESS_TOKEN APP_SECRET_KEY SESSION_TOKEN AWS_SECRET_ACCESS_KEY; do
   invalid "s|Payment capture failure in src/payments.go.|$key=top-secret-credential|" "credential assignment $key"
 done
@@ -185,6 +197,9 @@ invalid 's|## Todo|## TOKEN=top-secret-credential|' 'credential in malformed sec
 invalid 's|### BL-002|### TOKEN=top-secret-credential|' 'credential in malformed item ID'
 invalid 's|\*\*Priority:\*\* High|\*\*Priority:\*\* DB_PASSWORD=top-secret-credential|' 'credential in invalid priority'
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=[REDACTED] and DB_PASSWORD name|' 'bracketed redaction and name' accept
+invalid 's|Payment capture failure in src/payments.go.|API_KEY=[REDACTED VALUE] and DB_PASSWORD name|' 'bracketed redaction label with spaces' accept
+invalid 's|Payment capture failure in src/payments.go.|API_KEY=[actually secret value] in examples|' 'unrecognized bracketed credential'
+invalid 's|Payment capture failure in src/payments.go.|API_KEY=[REDACTED VALUE]still-secret|' 'redaction prefix followed by credential'
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=<redacted> and DB_PASSWORD name|' 'angle-bracket redaction and name' accept
 invalid 's|Payment capture failure in src/payments.go.|Connect to https://service@api.example.test/tasks|' 'URL without password' accept
 cp "$fixture/valid.md" "$root/docs/backlog.md"

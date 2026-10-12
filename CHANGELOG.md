@@ -4,6 +4,7 @@ All notable changes to this repository are documented here. Releases follow sema
 
 ## [Unreleased]
 
+- Suppressed standalone credential tokens in backlog TODO helper output while retaining safe lead locations, and accepted only recognized multiword redaction labels in credential assignments.
 - Made catchup and backlog updates repeat-safe with integrity fingerprints and conservative legacy-file adoption.
 - Made recap initial coverage the latest 100 commits and complete checkpoint-to-HEAD updates in bounded history batches, with no partial checkpoint advance.
 - Set `disable-model-invocation: true` for all project-memory skills.
