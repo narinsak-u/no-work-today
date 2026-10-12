@@ -40,7 +40,7 @@ Each skill is independently installable. `to-recap` does not require `to-catchup
 
 ### Manual installation
 
-If the CLI is unavailable, clone the repository and copy the skill directory—including its `SKILL.md` and `references/` directory—into the skills directory supported by your agent:
+If the CLI is unavailable, clone the repository and copy the **entire** skill directory—including `SKILL.md`, `references/`, and `scripts/`—into the skills directory supported by your agent:
 
 ```bash
 git clone https://github.com/narinsak-u/no-work-today.git
@@ -56,10 +56,18 @@ Run a skill from the root of the target project and ask your agent to use it. Ea
 | Skill | Output | What it helps with |
 | --- | --- | --- |
 | `to-catchup` | `docs/overview.md` | Project purpose, architecture, application flow, modules, configuration, workflow, and cautions. |
-| `to-recap` | `docs/recap.md` | Append-only, checkpointed summaries of committed work, kept separate from uncommitted changes. |
+| `to-recap` | `docs/recap.md` | Append-only, checkpointed summaries of committed work; initial coverage is at most the latest 100 commits, while later checkpoint ranges are reviewed completely in bounded batches. |
 | `to-backlog` | `docs/backlog.md` | Evidence-backed unfinished work with stable IDs, statuses, priorities, dependencies, and blockers. |
 
 Existing unrelated files in `docs/` are preserved. Install only the skill that matches your workflow, or install all three for complementary project memory.
+
+The agent runs each installed skill's read-only shell helpers to gather bounded facts, interprets the relevant source and history, writes only that skill's owned Markdown file, then runs its validator. The helpers do **not** generate architectural conclusions, recap prose, or backlog priorities. An existing document's fingerprint and Git state control whether it can be updated safely; if ownership or history is ambiguous, the skill stops instead of overwriting it. Each skill may use the other documents as optional read-only context.
+
+### Requirements and verification
+
+- Bash, Git, and standard Unix utilities (`find`, `grep`, `sed`, `awk`); a SHA-256 utility (`sha256sum` or `shasum`) is required for document fingerprints. `rg`, `jq`, and `fd` are optional, not required.
+- Designed for Linux, macOS, WSL, and common coding-agent containers. Native Windows shells are not supported.
+- Run the offline shell integration suite from this repository's root: `bash tests/test-scripts.sh`. It exercises standalone skill installation and temporary Git fixtures, including a recap range larger than 1,000 commits. Script tests check observable facts and document structure; they cannot prove an agent's explanation of an application's architecture.
 
 ## Safety and evidence rules 🛡️
 

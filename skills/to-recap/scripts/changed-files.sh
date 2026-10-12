@@ -23,8 +23,10 @@ parent=${parent%% *}
 if [[ $parent == "$commit" ]]; then
   # Root commits have no parent.
   command=(git -C "$repo" diff-tree --root --no-commit-id --name-status -r "$commit")
+  summary=$(git -C "$repo" show --format= --shortstat --root "$commit")
 else
   command=(git -C "$repo" diff --name-status "$parent" "$commit")
+  summary=$(git -C "$repo" diff --shortstat "$parent" "$commit")
 fi
 total=$("${command[@]}" | awk 'END {print NR}')
 if ((offset > total)); then echo 'offset exceeds changed-file count' >&2; exit 2; fi
@@ -32,4 +34,5 @@ end=$((offset + limit))
 if ((end > total)); then end=$total; fi
 printf 'commit: %s\ntotal: %s\noffset: %s\nnext_offset: %s\n' "$commit" "$total" "$offset" "$end"
 if ((end < total)); then printf 'has_more: yes\n'; else printf 'has_more: no\n'; fi
+printf 'summary: %s\n' "${summary:-no changes}"
 "${command[@]}" | awk -v start="$offset" -v end="$end" 'NR>start && NR<=end {print "file: " $0}'

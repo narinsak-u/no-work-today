@@ -17,17 +17,17 @@ printf 'TODO: fake embedded binary\000more data\n' > "$root/src/binary.dat"
 printf 'TODO: skip generated backlog\n' > "$root/docs/backlog.md"
 
 candidates="$(bash "$skill/scripts/find-todos.sh" "$root")"
-[[ "$candidates" == *'src/payments.go:1:'*'Add retries'* ]]
-[[ "$candidates" == *'src/order file.go:1:'*'Preserve order'* ]]
-[[ "$candidates" == *'notes.txt:1:'*'migration blockers'* ]]
-[[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* ]]
+[[ "$candidates" == *'src/payments.go:1:'*'Add retries'* ]] || exit 1
+[[ "$candidates" == *'src/order file.go:1:'*'Preserve order'* ]] || exit 1
+[[ "$candidates" == *'notes.txt:1:'*'migration blockers'* ]] || exit 1
+[[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* ]] || exit 1
 
 non_git="$(bash "$skill/scripts/working-tree.sh" "$root")"
-[[ "$non_git" == *'GIT=none'* ]]
+[[ "$non_git" == *'GIT=none'* ]] || exit 1
 git -C "$root" init -q
 git -C "$root" symbolic-ref HEAD refs/heads/fixture
 empty_state="$(bash "$skill/scripts/working-tree.sh" "$root")"
-[[ "$empty_state" == *'BRANCH=fixture'* && "$empty_state" == *'HEAD=none'* ]]
+[[ "$empty_state" == *'BRANCH=fixture'* && "$empty_state" == *'HEAD=none'* ]] || exit 1
 git -C "$root" add src/payments.go
 git -C "$root" -c user.name=Fixture -c user.email=fixture@example.test commit -qm initial
 printf 'more\n' >> "$root/src/payments.go"
@@ -35,7 +35,7 @@ git -C "$root" add src/payments.go
 printf 'unstaged\n' >> "$root/src/payments.go"
 printf 'untracked\n' > "$root/src/new-task.txt"
 state="$(bash "$skill/scripts/working-tree.sh" "$root")"
-[[ "$state" == *'BRANCH=fixture'* && "$state" == *'HEAD='* && "$state" == *'STATUS=MM'*'src/payments.go'* && "$state" == *'src/new-task.txt'* ]]
+[[ "$state" == *'BRANCH=fixture'* && "$state" == *'HEAD='* && "$state" == *'STATUS=MM'*'src/payments.go'* && "$state" == *'src/new-task.txt'* ]] || exit 1
 
 cat > "$root/docs/backlog.md" <<'DOC'
 # Project Backlog

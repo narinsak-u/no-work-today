@@ -5,8 +5,9 @@ All notable changes to this repository are documented here. Releases follow sema
 ## [Unreleased]
 
 - Made catchup and backlog updates repeat-safe with integrity fingerprints and conservative legacy-file adoption.
-- Made recap history resumable in bounded batches, with a fixed initial history window and branch-bound checkpoints.
+- Made recap initial coverage the latest 100 commits and complete checkpoint-to-HEAD updates in bounded history batches, with no partial checkpoint advance.
 - Set `disable-model-invocation: true` for all project-memory skills.
+- Added portable, read-only repository inspection helpers and Markdown validators for the three independently installable skills, plus an offline fixture-based integration suite.
 
 ## [0.1.0] — 2026-10-02
 

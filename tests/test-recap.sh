@@ -15,17 +15,17 @@ initial="$(git -C "$repo" rev-parse HEAD)"
 for ((n=1; n<=110; n++)); do git -C "$repo" commit --allow-empty -qm "initial $n"; done
 head="$(git -C "$repo" rev-parse HEAD)"
 context="$(bash "$skill/scripts/collect-git-context.sh" "$repo")"
-[[ "$context" == *"mode: initial"* && "$context" == *"total: 100"* && "$context" == *"head: $head"* && "$context" == *"older_history: yes"* ]]
+[[ "$context" == *"mode: initial"* && "$context" == *"total: 100"* && "$context" == *"head: $head"* && "$context" == *"older_history: yes"* ]] || exit 1
 oldest="$(git -C "$repo" rev-list --max-count=100 HEAD | awk 'END {print}')"
-[[ "$context" == *"coverage_oldest: $oldest"* && "$context" == *"commit: $oldest"* ]]
-[[ "$(printf '%s\n' "$context" | awk '/^commit: / {n++} END {print n+0}')" == 100 ]]
-[[ "$context" == *"has_more: no"* ]]
+[[ "$context" == *"coverage_oldest: $oldest"* && "$context" == *"commit: $oldest"* ]] || exit 1
+[[ "$(printf '%s\n' "$context" | awk '/^commit: / {n++} END {print n+0}')" == 100 ]] || exit 1
+[[ "$context" == *"has_more: no"* ]] || exit 1
 mkdir -p "$fixture/short history"
 git -C "$fixture/short history" init -q
 git -C "$fixture/short history" -c user.email=recap@example.test -c user.name=Recap commit --allow-empty -qm one
 git -C "$fixture/short history" -c user.email=recap@example.test -c user.name=Recap commit --allow-empty -qm two
 short="$(bash "$skill/scripts/collect-git-context.sh" "$fixture/short history")"
-[[ "$short" == *"total: 2"* && "$short" == *"older_history: no"* ]]
+[[ "$short" == *"total: 2"* && "$short" == *"older_history: no"* ]] || exit 1
 
 # Every commit in a long delta must be reachable through bounded pages, without duplication.
 checkpoint="$head"
@@ -48,7 +48,7 @@ for ((offset=0; offset<1007; offset+=100)); do
 done
 cmp "$expected" "$actual"
 repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$head")"
-[[ "$repeat" == *"total: 0"* && "$repeat" == *"has_more: no"* ]]
+[[ "$repeat" == *"total: 0"* && "$repeat" == *"has_more: no"* ]] || exit 1
 if bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" 0 "$checkpoint" >/dev/null 2>&1; then
   echo 'Collector accepted changed HEAD' >&2; exit 1
 fi
@@ -61,8 +61,8 @@ for ((n=1; n<=12; n++)); do printf 'x\n' > "$repo/file $n"; git -C "$repo" add "
 git -C "$repo" commit -qm files
 files_commit="$(git -C "$repo" rev-parse HEAD)"
 files="$(bash "$skill/scripts/changed-files.sh" "$repo" "$files_commit" 0 5)"
-[[ "$files" == *"total: 12"* && "$files" == *"has_more: yes"* ]]
-[[ "$(printf '%s\n' "$files" | awk '/^file: / {n++} END {print n+0}')" == 5 ]]
+[[ "$files" == *"total: 12"* && "$files" == *"has_more: yes"* && "$files" == *'12 files changed'* ]] || exit 1
+[[ "$(printf '%s\n' "$files" | awk '/^file: / {n++} END {print n+0}')" == 5 ]] || exit 1
 
 # Fingerprint and state checks must never rewrite damaged or branch-mismatched recaps.
 recap="$repo/docs/recap.md"
@@ -74,7 +74,8 @@ cat > "$recap" <<DOC
 - **Category:** testing
 - **Status:** Completed
 - **What / why:** Confirmed history.
-- **Important files:** none
+- **Important files:**
+  - `file 1` — added in this commit.
 - **Commits:** \`$files_commit\`
 - **Impact:** Unknown
 - **Junior notes:** None.
@@ -100,19 +101,30 @@ cp "$fixture/signed" "$recap"
 bash "$skill/scripts/validate-checkpoint.sh" "$repo" "$recap"
 bash "$skill/scripts/validate-recap.sh" "$repo" "$recap"
 printf '%s\n' "$files_commit" > "$fixture/selected"
-bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/selected" "$files_commit"
+previous="$(git -C "$repo" rev-parse "$files_commit^")"
+awk -v base="$previous" '/^last_commit: / {print "last_commit: " base; next} /^output_sha256: / {next} {print}' "$recap" > "$fixture/prior-unsigned"
+prior_hash="$( (sha256sum "$fixture/prior-unsigned" 2>/dev/null || shasum -a 256 "$fixture/prior-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$prior_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/prior-unsigned" > "$fixture/prior-recap"
+bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/selected" "$files_commit" "$fixture/prior-recap"
+awk -v base="$checkpoint" '/^last_commit: / {print "last_commit: " base; next} /^output_sha256: / {next} {print}' "$recap" > "$fixture/old-unsigned"
+old_hash="$( (sha256sum "$fixture/old-unsigned" 2>/dev/null || shasum -a 256 "$fixture/old-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$old_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/old-unsigned" > "$fixture/old-recap"
+if gap_error="$(bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/selected" "$files_commit" "$fixture/old-recap" 2>&1)"; then
+  echo 'Validator accepted a selected list that skipped the earlier range' >&2; exit 1
+fi
+[[ "$gap_error" == *'selected history does not cover'* ]] || { printf 'Wrong rejection: %s\n' "$gap_error" >&2; exit 1; }
 # An interrupted draft that accounts for one rather than all 1,007 commits
 # cannot advance the checkpoint or modify the already published recap.
 cp "$expected" "$fixture/incomplete"
 printf '%s\n' "$files_commit" >> "$fixture/incomplete"
-if bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/incomplete" "$files_commit" >/dev/null 2>&1; then
+if bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/incomplete" "$files_commit" "$fixture/old-recap" >/dev/null 2>&1; then
   echo 'Validator accepted incomplete selected history' >&2; exit 1
 fi
 before="$(git -C "$repo" hash-object "$recap")"
 if bash "$skill/scripts/validate-checkpoint.sh" "$repo" "$recap" "$checkpoint" >/dev/null 2>&1; then
   echo 'Checkpoint validator accepted mismatched HEAD' >&2; exit 1
 fi
-[[ "$(git -C "$repo" hash-object "$recap")" == "$before" ]]
+[[ "$(git -C "$repo" hash-object "$recap")" == "$before" ]] || exit 1
 printf 'tampered\n' >> "$recap"
 if bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" >/dev/null 2>&1; then
   echo 'Validator accepted altered recap' >&2; exit 1
@@ -136,7 +148,7 @@ git -C "$repo" checkout -qb other "$checkpoint"
 if bash "$skill/scripts/validate-checkpoint.sh" "$repo" "$recap" >/dev/null 2>&1; then
   echo 'Checkpoint validator accepted branch switch' >&2; exit 1
 fi
-[[ "$(git -C "$repo" hash-object "$recap")" == "$before" ]]
+[[ "$(git -C "$repo" hash-object "$recap")" == "$before" ]] || exit 1
 
 mkdir -p "$fixture/not git" "$fixture/empty"
 git -C "$fixture/empty" init -q

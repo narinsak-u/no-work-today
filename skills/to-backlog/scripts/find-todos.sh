@@ -15,8 +15,10 @@ while IFS= read -r -d '' path; do
   esac
   # Avoid scanning huge files even if they have a source-like extension.
   [[ "$(wc -c < "$path")" -le 524288 ]] || continue
+  # Bash read -d '' stops at a NUL byte; unlike awk, this works with BSD awk
+  # where a NUL-format probe can behave like an empty-string match.
+  if IFS= read -r -d '' _ < "$path"; then continue; fi
   LC_ALL=C awk -v path="$relative" '
-    index($0, sprintf("%c", 0)) { binary = 1; exit }
     {
       text = $0
       if (tolower(text) ~ /(^|[^[:alnum:]_])(todo|fixme|hack|xxx|wip)([^[:alnum:]_]|$)/ && matches < 100) {
@@ -26,6 +28,6 @@ while IFS= read -r -d '' path; do
         candidates[++matches] = path ":" NR ":" text
       }
     }
-    END { if (!binary) for (i = 1; i <= matches; i++) print candidates[i] }
+    END { for (i = 1; i <= matches; i++) print candidates[i] }
   ' "$path"
 done | awk 'NR <= 120 { print } END { if (NR > 120) printf "... %d additional candidates omitted; narrow the scan before interpreting\n", NR - 120 }'

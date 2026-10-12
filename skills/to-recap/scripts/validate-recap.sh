@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: validate-recap.sh REPOSITORY RECAP [SELECTED_IDS [EXPECTED_HEAD]]
+# Usage: validate-recap.sh REPOSITORY RECAP [SELECTED_IDS EXPECTED_HEAD INITIAL|PRIOR_RECAP]
 # SELECTED_IDS lists every scoped commit once, oldest-first (one full ID per line).
-if (( $# < 2 || $# > 4 )); then
-  echo 'usage: validate-recap.sh REPOSITORY RECAP [SELECTED_IDS [EXPECTED_HEAD]]' >&2; exit 2
+if (( $# != 2 && $# != 5 )); then
+  echo 'usage: validate-recap.sh REPOSITORY RECAP [SELECTED_IDS EXPECTED_HEAD INITIAL|PRIOR_RECAP]' >&2; exit 2
 fi
 repo=$1
 recap=$2
 selected=${3:-}
 expected_head=${4:-}
+source_recap=${5:-}
 fail() { echo "invalid recap: $*" >&2; exit 1; }
 bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$recap" "$expected_head" >/dev/null || fail 'unsafe state or checkpoint'
 awk '
@@ -23,7 +24,7 @@ awk '
   in_entry && /^- \*\*Status:\*\* / {statuses++;
     if ($0 !~ /^- \*\*Status:\*\* (Completed|Partial|In progress|Blocked|Needs verification)$/) invalid=1}
   in_entry && /^- \*\*What \/ why:\*\* / {whys++}
-  in_entry && /^- \*\*Important files:\*\* / {files++}
+  in_entry && /^- \*\*Important files:\*\*($| )/ {files++}
   in_entry && /^- \*\*Commits:\*\* / {commits++}
   in_entry && /^- \*\*Impact:\*\* / {impacts++}
   in_entry && /^- \*\*Junior notes:\*\* / {notes++}
@@ -62,6 +63,43 @@ if [[ -n $selected ]]; then
   [[ -z $last || $last == "$checkpoint" ]] || fail 'checkpoint does not match final selected commit'
   head=$(git -C "$repo" rev-parse HEAD)
   [[ $checkpoint == "$head" ]] || fail 'full range not represented at checkpoint'
+  # Derive the expected set from Git and the original boundary, not from
+  # the agent-supplied list alone: an omitted middle commit must fail.
+  if [[ $source_recap == INITIAL ]]; then
+    cmp -s "$selected" <(git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
+      awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}') ||
+      fail 'selected history does not cover the complete initial window'
+  else
+    [[ -f $source_recap ]] || fail 'original recap missing'
+    if grep -q '^output_sha256: ' "$source_recap"; then
+      bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" >/dev/null ||
+        fail 'original recap boundary unsafe'
+    fi
+    base=$(awk '/^last_commit: / {print $2}' "$source_recap")
+    [[ $base =~ ^[0-9a-f]{40,64}$ ]] &&
+      git -C "$repo" merge-base --is-ancestor "$base" "$head" ||
+      fail 'original checkpoint not an ancestor'
+    if grep -q '^history_head: ' "$source_recap"; then
+      history_head=$(awk '/^history_head: / {print $2}' "$source_recap")
+      pending_ids=$(awk '/^pending_commits: / {print substr($0,18)}' "$source_recap")
+      [[ -n $pending_ids ]] || fail 'original pending queue missing'
+      if [[ $pending_ids == none ]]; then
+        cmp -s "$selected" <(git -C "$repo" rev-list --topo-order --reverse "$history_head..$head") ||
+          fail 'selected history does not cover the complete checkpoint range'
+      else
+        cmp -s "$selected" <(awk -v pending="$pending_ids" '
+          BEGIN {split(pending, queue, " "); for (i in queue) want[queue[i]]=1}
+          FILENAME==ARGV[1] {want[$0]=1; next}
+          want[$0] {print}
+        ' <(git -C "$repo" rev-list "$history_head..$head") <(git -C "$repo" rev-list --topo-order --reverse "$head")) ||
+          fail 'selected history does not cover the complete pending range'
+      fi
+    else
+      grep -q '^pending_commits: ' "$source_recap" && fail 'original pending queue lacks history head'
+      cmp -s "$selected" <(git -C "$repo" rev-list --topo-order --reverse "$base..$head") ||
+        fail 'selected history does not cover the complete checkpoint range'
+    fi
+  fi
   branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
   grep -Fqx -- "- **HEAD:** \`$head\` on \`$branch\`" "$recap" || fail 'Current Point HEAD or branch disagrees with Git'
   grep -Fqx -- "- **Recap checkpoint:** \`$checkpoint\`" "$recap" || fail 'Current Point checkpoint disagrees with state'

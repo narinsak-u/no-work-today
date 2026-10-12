@@ -13,19 +13,19 @@ printf 'skip\n' > "$fixture/my project/dist/skip.ts"
 printf 'skip\n' > "$fixture/my project/target/skip.ts"
 
 scan="$(bash "$skill/scripts/scan-project.sh" "$fixture/my project")"
-[[ "$scan" == *"package.json"* && "$scan" == *"apps/web"* ]]
-[[ "$scan" != *"node_modules"* && "$scan" != *"dist/skip.ts"* && "$scan" != *"target/skip.ts"* ]]
+[[ "$scan" == *"package.json"* && "$scan" == *"apps/web"* ]] || exit 1
+[[ "$scan" != *"node_modules"* && "$scan" != *"dist/skip.ts"* && "$scan" != *"target/skip.ts"* ]] || exit 1
 stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/my project")"
-[[ "$stack" == *"JavaScript"* && "$stack" == *"Next.js"* ]]
+[[ "$stack" == *"JavaScript"* && "$stack" == *"Next.js"* ]] || exit 1
 entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/my project")"
-[[ "$entrypoints" == *"src/main.rs"* && "$entrypoints" == *"apps/web/main.go"* ]]
-[[ "$entrypoints" != *"node_modules"* ]]
+[[ "$entrypoints" == *"src/main.rs"* && "$entrypoints" == *"apps/web/main.go"* ]] || exit 1
+[[ "$entrypoints" != *"node_modules"* ]] || exit 1
 
 mkdir -p "$fixture/rust only" "$fixture/go only"
 printf '[package]\nname = "demo"\n' > "$fixture/rust only/Cargo.toml"
 printf 'module example.test/demo\n' > "$fixture/go only/go.mod"
-[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/rust only")" == *"Rust"* ]]
-[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/go only")" == *"Go"* ]]
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/rust only")" == *"Rust"* ]] || exit 1
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/go only")" == *"Go"* ]] || exit 1
 
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
