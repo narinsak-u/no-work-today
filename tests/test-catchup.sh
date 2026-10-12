@@ -101,6 +101,9 @@ for unsafe in \
   'AWS_SECRET_ACCESS_KEY=abc123' \
   'DB_PASSWORD=[actualSecret]' \
   'APP_TOKEN=<actualSecret>' \
+  'DB_PASSWORD=[REDACTED]actualSecret' \
+  'APP_TOKEN=<redacted>actualSecret' \
+  'DB_PASSWORD=[actual Secret]' \
   'mongodb+srv://user:secret123@cluster.example/app' \
   'rediss://user:secret123@cache.example/0' \
   'amqps://user:secret123@queue.example/' \

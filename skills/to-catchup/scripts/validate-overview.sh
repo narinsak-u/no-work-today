@@ -21,8 +21,15 @@ if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|
       rest = line
       while (match(rest, /(^|[^[:alnum:]_])([[:alnum:]_]*_)?(PASSWORD|API_KEY|ACCESS_TOKEN|SECRET_KEY|TOKEN|AWS_SECRET_ACCESS_KEY)[[:space:]]*[:=][[:space:]]*/)) {
         rest = substr(rest, RSTART + RLENGTH)
-        if ((match(rest, /^\[[^]]+\]/) || match(rest, /^<[^>]+>/) || match(rest, /^[^[:space:],;]+/)) &&
-            !placeholder(substr(rest, RSTART, RLENGTH))) bad = 1
+        if (match(rest, /^(\[[^]]+\]|<[^>]+>)/) &&
+            (length(rest) == RLENGTH || substr(rest, RLENGTH + 1, 1) ~ /^[[:space:],;]$/)) {
+          value = substr(rest, RSTART, RLENGTH)
+        } else if (match(rest, /^[^[:space:],;]+/)) {
+          value = substr(rest, RSTART, RLENGTH)
+        } else {
+          value = ""
+        }
+        if (value != "" && !placeholder(value)) bad = 1
       }
       rest = line
       while (match(rest, /(POSTGRES(QL)?|MYSQL|MONGODB(\+SRV)?|REDIS(S)?|AMQP(S)?|HTTPS?):\/\//)) {
