@@ -32,9 +32,10 @@ git -C "$root" add src/payments.go
 git -C "$root" -c user.name=Fixture -c user.email=fixture@example.test commit -qm initial
 printf 'more\n' >> "$root/src/payments.go"
 git -C "$root" add src/payments.go
+printf 'unstaged\n' >> "$root/src/payments.go"
 printf 'untracked\n' > "$root/src/new-task.txt"
 state="$(bash "$skill/scripts/working-tree.sh" "$root")"
-[[ "$state" == *'BRANCH=fixture'* && "$state" == *'HEAD='* && "$state" == *'STATUS=AM'*'src/payments.go'* && "$state" == *'src/new-task.txt'* ]]
+[[ "$state" == *'BRANCH=fixture'* && "$state" == *'HEAD='* && "$state" == *'STATUS=MM'*'src/payments.go'* && "$state" == *'src/new-task.txt'* ]]
 
 cat > "$root/docs/backlog.md" <<'DOC'
 # Project Backlog
