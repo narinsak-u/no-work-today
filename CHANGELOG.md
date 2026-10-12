@@ -6,7 +6,6 @@ All notable changes to this repository are documented here. Releases follow sema
 
 - Made catchup and backlog updates repeat-safe with integrity fingerprints and conservative legacy-file adoption.
 - Made recap history resumable in bounded batches, with a fixed initial history window and branch-bound checkpoints.
-- Added disposable black-box fixtures for repeat updates, legacy outputs, backlog invariants, and large-history recap boundaries.
 - Set `disable-model-invocation: true` for all project-memory skills.
 
 ## [0.1.0] — 2026-10-02
