@@ -204,6 +204,107 @@ if gap_error="$(bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixtu
   echo 'Validator accepted a selected list that skipped the earlier range' >&2; exit 1
 fi
 [[ "$gap_error" == *'selected history does not cover'* ]] || { printf 'Wrong rejection: %s\n' "$gap_error" >&2; exit 1; }
+
+# A published checkpoint with pending history must not advance for IDs that
+# appear only under Current Point, or for missing/repeated dated-entry IDs.
+account_repo="$fixture/accounting project"
+mkdir -p "$account_repo/docs"
+git -C "$account_repo" init -q
+git -C "$account_repo" config user.email recap@example.test
+git -C "$account_repo" config user.name Recap
+git -C "$account_repo" commit --allow-empty -qm checkpoint
+account_base="$(git -C "$account_repo" rev-parse HEAD)"
+account_branch="$(git -C "$account_repo" branch --show-current)"
+git -C "$account_repo" commit --allow-empty -qm 'first pending batch'
+account_first="$(git -C "$account_repo" rev-parse HEAD)"
+git -C "$account_repo" commit --allow-empty -qm 'second pending batch'
+account_second="$(git -C "$account_repo" rev-parse HEAD)"
+account_prior="$account_repo/docs/recap.md"
+cat > "$fixture/account-prior-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Committed range:** through $account_base.
+## 2026-10-10 — Published checkpoint
+- **Category:** testing
+- **Status:** Completed
+- **What / why:** Preserved prior work.
+- **Important files:** none
+- **Commits:** \`$account_base\`
+- **Impact:** Checkpoint documented.
+- **Junior notes:** None.
+- **Verification:** not run
+## Current Point
+- **HEAD:** \`$account_second\` on \`$account_branch\`
+- **Recap checkpoint:** \`$account_base\`
+- **Pending committed history:** Two commits.
+- **Committed work:** Earlier entry.
+- **Uncommitted work:** None.
+- **Next safe point:** Account for pending work.
+<!-- recap-state
+branch: $account_branch
+last_commit: $account_base
+last_updated: 2026-10-10
+history_head: $account_second
+pending_commits: $account_first $account_second
+-->
+DOC
+account_hash="$( (sha256sum "$fixture/account-prior-unsigned" 2>/dev/null || shasum -a 256 "$fixture/account-prior-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$account_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/account-prior-unsigned" > "$account_prior"
+git -C "$account_repo" commit --allow-empty -qm 'new commit after prior checkpoint'
+account_last="$(git -C "$account_repo" rev-parse HEAD)"
+printf '%s\n' "$account_first" "$account_second" "$account_last" > "$fixture/account-selected"
+account_before="$(git -C "$account_repo" hash-object "$account_prior")"
+account_draft="$fixture/account-draft"
+make_account_draft() {
+  local entry_commits=$1 current_note=$2 draft_hash
+  awk -v ids="$entry_commits" -v note="$current_note" -v latest="$account_last" -v branch="$account_branch" '
+    /^## Current Point$/ {
+      print "## 2026-10-12 — Selected history"
+      print "- **Category:** testing"
+      print "- **Status:** Completed"
+      print "- **What / why:** Account for the selected history."
+      print "- **Important files:** none"
+      print "- **Commits:** " ids
+      print "- **Impact:** History represented."
+      print "- **Junior notes:** None."
+      print "- **Verification:** not run"
+      print
+      print "- **HEAD:** `" latest "` on `" branch "`"
+      print "- **Recap checkpoint:** `" latest "`"
+      print "- **Pending committed history:** None"
+      print "- **Committed work:** " note
+      print "- **Uncommitted work:** None."
+      print "- **Next safe point:** None identified."
+      next
+    }
+    /^- \*\*(HEAD|Recap checkpoint|Pending committed history|Committed work|Uncommitted work|Next safe point):\*\*/ {next}
+    /^last_commit: / {print "last_commit: " latest; next}
+    /^history_head: / {print "history_head: " latest; next}
+    /^pending_commits: / {print "pending_commits: none"; next}
+    /^output_sha256: / {next}
+    {print}
+  ' "$account_prior" > "$fixture/account-unsigned"
+  draft_hash="$( (sha256sum "$fixture/account-unsigned" 2>/dev/null || shasum -a 256 "$fixture/account-unsigned") | awk 'NR==1 {print $1}')"
+  awk -v hash="$draft_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/account-unsigned" > "$account_draft"
+}
+reject_account_draft() {
+  local error
+  if error="$(bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_draft" "$fixture/account-selected" "$account_last" "$account_prior" 2>&1)"; then
+    echo 'Validator accepted missing or repeated selected ID outside dated entries' >&2; exit 1
+  fi
+  [[ "$error" == *'selected commits missing or repeated'* ]] || { printf 'Wrong rejection: %s\n' "$error" >&2; exit 1; }
+  [[ "$(git -C "$account_repo" hash-object "$account_prior")" == "$account_before" ]] || exit 1
+  [[ "$(awk '/^last_commit: / {print $2}' "$account_prior")" == "$account_base" ]] || exit 1
+}
+make_account_draft "\`$account_first\` \`$account_second\`" "New commit \`$account_last\` appears only here."
+reject_account_draft
+make_account_draft "\`$account_first\` \`$account_last\`" "The middle commit \`$account_second\` is only here."
+reject_account_draft
+make_account_draft "\`$account_first\` \`$account_second\` \`$account_last\` \`$account_last\`" 'All work is documented.'
+reject_account_draft
+make_account_draft "\`$account_first\` \`$account_second\` \`$account_last\`" 'All work is documented.'
+bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_draft" "$fixture/account-selected" "$account_last" "$account_prior"
+[[ "$(git -C "$account_repo" hash-object "$account_prior")" == "$account_before" ]] || exit 1
 # An interrupted draft that accounts for one rather than all 1,007 commits
 # cannot advance the checkpoint or modify the already published recap.
 cp "$expected" "$fixture/incomplete"
