@@ -4,7 +4,7 @@ All notable changes to this repository are documented here. Releases follow sema
 
 ## [Unreleased]
 
-- Hardened overview validation against URL user-info separator masking and bracketed credential values while preserving named redaction examples.
+- Hardened overview validation against URL user-info separator masking, bracketed credentials with appended values, and comma-delimited credential tails while preserving named redaction examples.
 - Made catchup and backlog updates repeat-safe with integrity fingerprints and conservative legacy-file adoption.
 - Made recap initial coverage the latest 100 commits and complete checkpoint-to-HEAD updates in bounded history batches, with no partial checkpoint advance.
 - Set `disable-model-invocation: true` for all project-memory skills.

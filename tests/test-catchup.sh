@@ -102,6 +102,8 @@ for unsafe in \
   'DB_PASSWORD=[actualSecret]' \
   'APP_TOKEN=<actualSecret>' \
   'DB_PASSWORD=[REDACTED]actualSecret' \
+  'DB_PASSWORD=[REDACTED],realpass' \
+  'DB_PASSWORD=[REDACTED], realpass' \
   'APP_TOKEN=<redacted>actualSecret' \
   'DB_PASSWORD=[actual Secret]' \
   'mongodb+srv://user:secret123@cluster.example/app' \
@@ -111,6 +113,8 @@ for unsafe in \
   'postgresql://user:realpass%3A[REDACTED]@db.example/app' \
   'postgresql://user%3Arealpass:[REDACTED]@db.example/app' \
   'postgresql://user:[actualSecret]@db.example/app' \
+  'postgresql://user:[REDACTED PASSWORD]realpass@db.example/app' \
+  'postgresql://user%3A[REDACTED PASSWORD]realpass%40db.example/app' \
   'postgresql://user%3A[actualSecret]%40db.example/app' \
   'postgres://user:secret123@db.example/app' \
   'mysql://user:p%40ssword@db.example/app' \
@@ -141,6 +145,7 @@ SERVICE_API_KEY=[REDACTED]
 APP_TOKEN: [example-token]
 DB_PASSWORD=<redacted>
 SERVICE_API_KEY=[REDACTED PASSWORD]
+DB_PASSWORD=[REDACTED], APP_TOKEN=[EXAMPLE TOKEN]
 APP_TOKEN: [example token]
 postgresql://user:[REDACTED]@db.example/app
 postgresql://user:[REDACTED PASSWORD]@db.example/app

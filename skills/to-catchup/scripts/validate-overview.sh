@@ -21,10 +21,14 @@ if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|
       rest = line
       while (match(rest, /(^|[^[:alnum:]_])([[:alnum:]_]*_)?(PASSWORD|API_KEY|ACCESS_TOKEN|SECRET_KEY|TOKEN|AWS_SECRET_ACCESS_KEY)[[:space:]]*[:=][[:space:]]*/)) {
         rest = substr(rest, RSTART + RLENGTH)
-        if (match(rest, /^(\[[^]]+\]|<[^>]+>)/) &&
-            (length(rest) == RLENGTH || substr(rest, RLENGTH + 1, 1) ~ /^[[:space:],;]$/)) {
+        if (match(rest, /^(\[[^]]+\]|<[^>]+>)/)) {
           value = substr(rest, RSTART, RLENGTH)
-        } else if (match(rest, /^[^[:space:],;]+/)) {
+          suffix = substr(rest, RLENGTH + 1)
+          if (suffix ~ /^,/ &&
+              suffix !~ /^,[[:space:]]*([[:alnum:]_]*_)?(PASSWORD|API_KEY|ACCESS_TOKEN|SECRET_KEY|TOKEN|AWS_SECRET_ACCESS_KEY)[[:space:]]*[:=]/)
+            bad = 1
+          if (suffix !~ /^([[:space:],;]|$)/) value = value suffix
+        } else if (match(rest, /^[^[:space:];]+/)) {
           value = substr(rest, RSTART, RLENGTH)
         } else {
           value = ""
@@ -34,7 +38,7 @@ if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|
       rest = line
       while (match(rest, /(POSTGRES(QL)?|MYSQL|MONGODB(\+SRV)?|REDIS(S)?|AMQP(S)?|HTTPS?):\/\//)) {
         rest = substr(rest, RSTART + RLENGTH)
-        if (match(rest, /^[^\/@[:space:]]+(:|%3A)([^\/@[:space:]]+|\[[^]]+\])(@|%40)/)) {
+        if (match(rest, /^[^\/@[:space:]]+(:|%3A)([^\/@[:space:]]|\[[^]]+\])+(@|%40)/)) {
           userinfo = substr(rest, RSTART, RLENGTH)
           sub(/(@|%40)$/, "", userinfo)
           match(userinfo, /(:|%3A)/)
