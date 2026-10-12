@@ -103,6 +103,64 @@ mkdir -p "$fixture/svelte only" "$fixture/big workspace/.venv" "$fixture/big wor
 printf '{"dependencies":{"svelte":"5.0.0"}}\n' > "$fixture/svelte only/package.json"
 svelte="$(bash "$skill/scripts/detect-stack.sh" "$fixture/svelte only")"
 [[ "$svelte" == *'|Svelte'* && "$svelte" != *'SvelteKit'* ]] || exit 1
+
+# A framework name in scripts, metadata, or an unrelated nested object is not a dependency.
+mkdir -p "$fixture/misleading manifest" "$fixture/declared framework"
+cat > "$fixture/misleading manifest/package.json" <<'JSON'
+{
+  "scripts": {"next": "echo next", "start": "echo \"react\": \"18\""},
+  "description": "Uses next",
+  "metadata": {"dependencies": {"vue": "3.0.0"}},
+  "dependencies": {"unrelated": "1.0.0"}
+}
+JSON
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/misleading manifest")"
+[[ "$stack" == 'package.json|JavaScript / TypeScript' ]] || { printf 'Non-dependencies produced framework hints: %s\n' "$stack" >&2; exit 1; }
+cat > "$fixture/declared framework/package.json" <<'JSON'
+{
+  "scripts": {"next": "echo next"},
+  "devDependencies": {
+    "next": "14.0.0",
+    "@sveltejs/kit": "2.0.0"
+  }
+}
+JSON
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared framework")"
+[[ "$stack" == *'package.json|Next.js'* && "$stack" == *'package.json|SvelteKit'* ]] || { printf 'Declared frameworks were missed: %s\n' "$stack" >&2; exit 1; }
+[[ "$stack" != *'|Svelte' ]] || { printf 'A different framework was inferred: %s\n' "$stack" >&2; exit 1; }
+
+mkdir -p "$fixture/ambiguous rust" "$fixture/declared rust" "$fixture/ambiguous python" "$fixture/declared python"
+printf '[package]\nname = "axum"\n[package.metadata]\naxum = "not a dependency"\n' > "$fixture/ambiguous rust/Cargo.toml"
+printf '[dependencies]\naxum = "0.8"\n' > "$fixture/declared rust/Cargo.toml"
+printf '[project]\ndescription = "fastapi"\ndependencies = [\n  # "fastapi" is not installed\n  "unrelated>=1"\n]\n[tool.other]\nfastapi = "not a dependency"\n' > "$fixture/ambiguous python/pyproject.toml"
+printf '# fastapi is not installed\nunrelated==1.0\n' > "$fixture/ambiguous python/requirements.txt"
+printf '[project]\ndependencies = ["fastapi>=0.100"]\n' > "$fixture/declared python/pyproject.toml"
+printf 'fastapi>=0.100\n' > "$fixture/declared python/requirements.txt"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/ambiguous rust")" == 'Cargo.toml|Rust' ]] || exit 1
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared rust")" == *'Cargo.toml|Axum'* ]] || exit 1
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/ambiguous python")"
+[[ "$stack" != *'|FastAPI'* && "$stack" == *'pyproject.toml|Python'* && "$stack" == *'requirements.txt|Python'* ]] || exit 1
+stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared python")"
+[[ "$stack" == *'pyproject.toml|FastAPI'* && "$stack" == *'requirements.txt|FastAPI'* ]] || exit 1
+printf '[project.optional-dependencies]\napi = [\n  "fastapi[all]>=0.100",\n]\n' > "$fixture/declared python/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/declared python")" == *'pyproject.toml|FastAPI'* ]] || exit 1
+
+# TOML table indentation and dependency-name case do not change declared evidence.
+mkdir -p "$fixture/indented cargo" "$fixture/misleading indented cargo" "$fixture/poetry distribution" "$fixture/misleading poetry"
+printf '  [dependencies] # declared crates\naxum = "0.8"\n' > "$fixture/indented cargo/Cargo.toml"
+printf '[dependencies]\nother = "1"\n  [package.metadata] # not dependencies\naxum = "not a dependency"\n' > "$fixture/misleading indented cargo/Cargo.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/indented cargo")" == $'Cargo.toml|Rust\nCargo.toml|Axum' ]] || { printf 'Indented dependency table lost Axum\n' >&2; exit 1; }
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/misleading indented cargo")" == 'Cargo.toml|Rust' ]] || { printf 'Indented non-dependency table produced Axum\n' >&2; exit 1; }
+printf '[tool.poetry.group.api.dependencies]\nFastAPI = "^0.100"\n' > "$fixture/poetry distribution/pyproject.toml"
+printf '[tool.poetry.scripts]\nFastAPI = "app:main"\n[tool.other.dependencies]\nFastAPI = "^0.100"\n[tool.poetry.dependencies]\n# FastAPI = "^0.100"\n' > "$fixture/misleading poetry/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Mixed-case Poetry dependency lost FastAPI\n' >&2; exit 1; }
+printf '[tool.poetry.dependencies]\nFastAPI = "^0.100"\n' > "$fixture/poetry distribution/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Mixed-case direct Poetry dependency lost FastAPI\n' >&2; exit 1; }
+printf '  [project] # package metadata\n  dependencies = ["FastAPI>=0.100"]\n' > "$fixture/poetry distribution/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Indented commented project table lost FastAPI\n' >&2; exit 1; }
+printf '  [project.optional-dependencies] # extras\napi = ["fastapi>=0.100"]\n' > "$fixture/poetry distribution/pyproject.toml"
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/poetry distribution")" == $'pyproject.toml|Python\npyproject.toml|FastAPI' ]] || { printf 'Indented commented optional project table lost FastAPI\n' >&2; exit 1; }
+[[ "$(bash "$skill/scripts/detect-stack.sh" "$fixture/misleading poetry")" == 'pyproject.toml|Python' ]] || { printf 'Non-dependency Poetry keys produced FastAPI\n' >&2; exit 1; }
 printf '{"dependencies":{"next":"1.0.0"}}\n' > "$fixture/big workspace/.venv/package.json"
 printf '{"dependencies":{"next":"1.0.0"}}\n' > "$fixture/big workspace/generated/package.json"
 for ((n=1; n<=130; n++)); do
@@ -157,4 +215,68 @@ printf 'GITHUB_TOKEN=ghp_exampletoken123456\\n' >> "$fixture/my project/docs/ove
 if bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" >/dev/null 2>&1; then
   printf 'Validator accepted token value\\n' >&2; exit 1
 fi
+
+# Credential checks are exercised through the installed validator CLI, with a
+# complete overview so structural validation cannot mask an unsafe value.
+for unsafe in \
+  'DB_PASSWORD=short' \
+  'SERVICE_API_KEY: abc123' \
+  'CI_ACCESS_TOKEN=abc123' \
+  'AUTH_SECRET_KEY: abc123' \
+  'APP_TOKEN=abc123' \
+  'AWS_SECRET_ACCESS_KEY=abc123' \
+  'DB_PASSWORD=[actualSecret]' \
+  'APP_TOKEN=<actualSecret>' \
+  'DB_PASSWORD=[REDACTED]actualSecret' \
+  'DB_PASSWORD=[REDACTED],realpass' \
+  'DB_PASSWORD=[REDACTED], realpass' \
+  'APP_TOKEN=<redacted>actualSecret' \
+  'DB_PASSWORD=[actual Secret]' \
+  'mongodb+srv://user:secret123@cluster.example/app' \
+  'rediss://user:secret123@cache.example/0' \
+  'amqps://user:secret123@queue.example/' \
+  'postgresql://user:secret123@db.example/app' \
+  'postgresql://user:realpass%3A[REDACTED]@db.example/app' \
+  'postgresql://user%3Arealpass:[REDACTED]@db.example/app' \
+  'postgresql://user:[actualSecret]@db.example/app' \
+  'postgresql://user:[REDACTED PASSWORD]realpass@db.example/app' \
+  'postgresql://user%3A[REDACTED PASSWORD]realpass%40db.example/app' \
+  'postgresql://user%3A[actualSecret]%40db.example/app' \
+  'postgres://user:secret123@db.example/app' \
+  'mysql://user:p%40ssword@db.example/app' \
+  'mongodb://user:secret123@db.example/app' \
+  'redis://user%3Asecret123%40cache.example/0' \
+  'amqp://user:secret123@queue.example/' \
+  'http://user:secret123@web.example/' \
+  'https://user:secret123@web.example/'; do
+  cp "$fixture/clean-overview.md" "$fixture/my project/docs/overview.md"
+  printf '%s\n' "$unsafe" >> "$fixture/my project/docs/overview.md"
+  cp "$fixture/my project/docs/overview.md" "$fixture/submitted-overview.md"
+  if diagnostic="$(bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" 2>&1)"; then
+    printf 'Validator accepted credential-bearing overview\n' >&2
+    exit 1
+  fi
+  [[ "$diagnostic" != *"$unsafe"* ]] || { printf 'Validator repeated a suspected credential\n' >&2; exit 1; }
+  [[ -n "$diagnostic" ]] || { printf 'Validator gave no safe diagnostic\n' >&2; exit 1; }
+  cmp -s "$fixture/submitted-overview.md" "$fixture/my project/docs/overview.md" || {
+    printf 'Validator modified the submitted overview\n' >&2; exit 1;
+  }
+done
+cp "$fixture/clean-overview.md" "$fixture/my project/docs/overview.md"
+cat >> "$fixture/my project/docs/overview.md" <<'DOC'
+DB_PASSWORD
+API_KEY_NAME=configuration
+TOKEN_ENDPOINT=https://web.example/path
+SERVICE_API_KEY=[REDACTED]
+APP_TOKEN: [example-token]
+DB_PASSWORD=<redacted>
+SERVICE_API_KEY=[REDACTED PASSWORD]
+DB_PASSWORD=[REDACTED], APP_TOKEN=[EXAMPLE TOKEN]
+APP_TOKEN: [example token]
+postgresql://user:[REDACTED]@db.example/app
+postgresql://user:[REDACTED PASSWORD]@db.example/app
+postgresql://user%3A[example password]%40db.example/app
+The application reads PASSWORD from its environment but this overview has no value.
+DOC
+bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
 printf 'Catch-up shell scenarios passed.\n'
