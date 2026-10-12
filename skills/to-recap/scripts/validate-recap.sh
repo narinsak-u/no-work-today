@@ -38,9 +38,18 @@ awk '
   END {if (invalid || title!=1 || scope!=1 || current!=1 || entries<1 || categories!=entries || statuses!=entries || whys!=entries || files!=entries || commits!=entries || impacts!=entries || notes!=entries || verifications!=entries || heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 || uncommitted!=1 || safe_points!=1) exit 1}
 ' "$recap" || fail 'required sections or work-entry fields missing'
 if LC_ALL=C awk '
-  function placeholder(value) {
-    sub(/^[`"\047]/, "", value)
-    return value ~ /^\[(redacted|masked|placeholder|your_[[:alnum:]_]+|user|username|password|api_key|access_token|secret_key|token)\]($|[^[:alnum:]_])/
+  function placeholder(value, quote, tail) {
+    if (value ~ /^[`"\047]/) {
+      quote=substr(value, 1, 1)
+      value=substr(value, 2)
+    }
+    if (!match(value, /^\[(redacted|masked|placeholder|your_[[:alnum:]_]+|user|username|password|api_key|access_token|secret_key|token)\]/)) return 0
+    tail=substr(value, RLENGTH+1)
+    if (quote != "") {
+      if (substr(tail, 1, 1) != quote) return 0
+      tail=substr(tail, 2)
+    }
+    return tail == "" || tail ~ /^[[:space:]]/
   }
   {
     line=tolower($0)
@@ -60,16 +69,17 @@ if LC_ALL=C awk '
     rest=line
     while (match(rest, /(postgres(ql)?|mysql|mongodb(\+srv)?|rediss?|amqps?|https?):\/\/[^[:space:]\/?#]+/)) {
       authority=substr(rest, RSTART, RLENGTH)
+      remaining=substr(rest, RSTART+RLENGTH)
       sub(/^[^:]+:\/\//, "", authority)
       userinfo=authority
       if (authority ~ /@[^@]+$/) sub(/@[^@]+$/, "", userinfo)
       else if (authority ~ /%40[^%]+$/) sub(/%40[^%]+$/, "", userinfo)
       else userinfo=""
-      if (userinfo ~ /(:|%3a)/) {
-        sub(/^[^:]*(:|%3a)/, "", userinfo)
+      if (match(userinfo, /(:|%3a)/)) {
+        userinfo=substr(userinfo, RSTART+RLENGTH)
         if (userinfo != "" && !placeholder(userinfo)) bad=1
       }
-      rest=substr(rest, RSTART+RLENGTH)
+      rest=remaining
     }
   }
   END {exit !bad}

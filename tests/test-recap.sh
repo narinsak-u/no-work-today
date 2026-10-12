@@ -115,6 +115,8 @@ sign_candidate() {
 }
 for detail in \
   'DB_PASSWORD=redRecapPassword29' \
+  'DB_PASSWORD=[REDACTED]:redRecapSuffix29' \
+  'SERVICE_API_KEY=[masked]!redRecapSuffix29' \
   'AWS_SECRET_ACCESS_KEY=redRecapAws29' \
   'SERVICE_API_KEY: redRecapApiKey29' \
   'AUTH_ACCESS_TOKEN=redRecapAccess29' \
@@ -126,6 +128,9 @@ for detail in \
   'SECRET_KEY=redRecapBare29' \
   'TOKEN=redRecapBare29' \
   'postgresql://reader:redRecapPg29@db.example.test/app' \
+  'postgresql://reader:[REDACTED]:redRecapSuffix29@db.example.test/app' \
+  'postgresql://reader:realpass%3A[REDACTED]@db.example.test/app' \
+  'postgresql://reader%3Arealpass%3A[REDACTED]@db.example.test/app' \
   'mysql://reader:redRecapMysql29@db.example.test/app' \
   'mongodb://reader:redRecapMongo29@db.example.test/app' \
   'redis://reader:redRecapRedis29@db.example.test/0' \
@@ -147,7 +152,11 @@ done
 for detail in \
   'DB_PASSWORD and SERVICE_API_KEY are configuration names, not values.' \
   'DB_PASSWORD=[REDACTED] and SERVICE_TOKEN: [redacted] are placeholders.' \
+  'DB_PASSWORD=[REDACTED] harmless context follows.' \
+  'DB_PASSWORD="[REDACTED]" harmless context follows.' \
+  'SERVICE_API_KEY=[masked]   extra prose.' \
   'postgresql://[USER]:[PASSWORD]@db.example.test/app is a redacted example.' \
+  'postgresql://reader%3A[REDACTED]@db.example.test/app is redacted.' \
   'The recap checkpoint includes tested documentation work.'
 do
   sign_candidate "$detail"
