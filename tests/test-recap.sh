@@ -100,6 +100,69 @@ awk -v hash="$hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$recap" > 
 cp "$fixture/signed" "$recap"
 bash "$skill/scripts/validate-checkpoint.sh" "$repo" "$recap"
 bash "$skill/scripts/validate-recap.sh" "$repo" "$recap"
+
+# Each candidate remains structurally valid and correctly signed: rejection
+# must come from the secret check, without altering the published checkpoint.
+published_digest="$(git -C "$repo" hash-object "$recap")"
+sign_candidate() {
+  awk -v detail="$1" '
+    /^- \*\*What \/ why:\*\* Confirmed history\.$/ {print $0 " " detail; next}
+    !/^output_sha256: / {print}
+  ' "$recap" > "$fixture/candidate-unsigned"
+  candidate_hash="$( (sha256sum "$fixture/candidate-unsigned" 2>/dev/null || shasum -a 256 "$fixture/candidate-unsigned") | awk 'NR==1 {print $1}')"
+  awk -v hash="$candidate_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/candidate-unsigned" > "$fixture/candidate-recap"
+  bash "$skill/scripts/validate-checkpoint.sh" "$repo" "$fixture/candidate-recap" >/dev/null
+}
+for detail in \
+  'DB_PASSWORD=redRecapPassword29' \
+  'DB_PASSWORD=[REDACTED]:redRecapSuffix29' \
+  'SERVICE_API_KEY=[masked]!redRecapSuffix29' \
+  'AWS_SECRET_ACCESS_KEY=redRecapAws29' \
+  'SERVICE_API_KEY: redRecapApiKey29' \
+  'AUTH_ACCESS_TOKEN=redRecapAccess29' \
+  'CACHE_SECRET_KEY: redRecapSecret29' \
+  'DEPLOY_TOKEN=redRecapToken29' \
+  'PASSWORD=redRecapBare29' \
+  'API_KEY=redRecapBare29' \
+  'ACCESS_TOKEN=redRecapBare29' \
+  'SECRET_KEY=redRecapBare29' \
+  'TOKEN=redRecapBare29' \
+  'postgresql://reader:redRecapPg29@db.example.test/app' \
+  'postgresql://reader:[REDACTED]:redRecapSuffix29@db.example.test/app' \
+  'postgresql://reader:realpass%3A[REDACTED]@db.example.test/app' \
+  'postgresql://reader%3Arealpass%3A[REDACTED]@db.example.test/app' \
+  'mysql://reader:redRecapMysql29@db.example.test/app' \
+  'mongodb://reader:redRecapMongo29@db.example.test/app' \
+  'redis://reader:redRecapRedis29@db.example.test/0' \
+  'amqp://reader:redRecapAmqp29@mq.example.test/vhost' \
+  'http://reader:redRecapHttp29@service.example.test/api' \
+  'https://reader:redRecapHttps29@service.example.test/api' \
+  'postgres://reader:redRecapEncoded%4029@db.example.test/app' \
+  'https://reader%40tenant:redRecapEncoded29@service.example.test/api'
+do
+  sign_candidate "$detail"
+  if rejection="$(bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/candidate-recap" 2>&1)"; then
+    echo 'Validator accepted a signed credential-bearing recap' >&2; exit 1
+  fi
+  [[ "$rejection" == *'possible secret value'* && "$rejection" != *"$detail"* ]] ||
+    { echo 'Unsafe or unexpected recap rejection diagnostic' >&2; exit 1; }
+  [[ "$(git -C "$repo" hash-object "$recap")" == "$published_digest" ]] ||
+    { echo 'Rejected draft changed published recap' >&2; exit 1; }
+done
+for detail in \
+  'DB_PASSWORD and SERVICE_API_KEY are configuration names, not values.' \
+  'DB_PASSWORD=[REDACTED] and SERVICE_TOKEN: [redacted] are placeholders.' \
+  'DB_PASSWORD=[REDACTED] harmless context follows.' \
+  'DB_PASSWORD="[REDACTED]" harmless context follows.' \
+  'SERVICE_API_KEY=[masked]   extra prose.' \
+  'postgresql://[USER]:[PASSWORD]@db.example.test/app is a redacted example.' \
+  'postgresql://reader%3A[REDACTED]@db.example.test/app is redacted.' \
+  'The recap checkpoint includes tested documentation work.'
+do
+  sign_candidate "$detail"
+  bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/candidate-recap" >/dev/null ||
+    { echo 'Validator rejected safe recap prose' >&2; exit 1; }
+done
 awk '/^output_sha256:/ {next} {printf "%s\r\n", $0}' "$recap" > "$fixture/crlf-unsigned"
 crlf_hash="$( (sha256sum "$fixture/crlf-unsigned" 2>/dev/null || shasum -a 256 "$fixture/crlf-unsigned") | awk 'NR==1 {print $1}')"
 awk -v hash="$crlf_hash" '{sub(/\r$/, ""); if ($0=="-->") printf "output_sha256: %s\r\n", hash; printf "%s\r\n", $0}' "$fixture/crlf-unsigned" > "$fixture/crlf-recap"
