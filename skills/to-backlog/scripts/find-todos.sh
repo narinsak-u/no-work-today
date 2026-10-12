@@ -24,7 +24,7 @@ while IFS= read -r -d '' path; do
     function placeholder(value) {
       return value ~ /^(\[redacted( (value|password|api key|secret key|access token|token))?\]|\[hidden\]|\[masked\]|<redacted>)$/
     }
-    function sensitive(source,    lower, rest, value, url, authority, info, at, offset, colon) {
+    function sensitive(source,    lower, rest, value, url, authority, info, at, offset, colon, end) {
       lower = tolower(source)
       if (lower ~ /(sk_live_|ghp_|github_pat_)[a-z0-9_-]+/) return 1
       rest = lower
@@ -40,6 +40,7 @@ while IFS= read -r -d '' path; do
       rest = lower
       while (match(rest, /(^|[^[:alnum:]_])(postgres(ql)?|mysql|mongodb(\+srv)?|rediss?|amqps?|https?):\/\/[^[:space:]\/?#<>"\047)]+/)) {
         url = substr(rest, RSTART, RLENGTH)
+        end = RSTART + RLENGTH
         authority = url
         sub(/^.*:\/\//, "", authority)
         info = authority
@@ -58,7 +59,7 @@ while IFS= read -r -d '' path; do
             if (value != "" && !placeholder(value)) return 1
           }
         }
-        rest = substr(rest, RSTART + RLENGTH)
+        rest = substr(rest, end)
       }
       return 0
     }

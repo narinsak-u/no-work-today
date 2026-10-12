@@ -118,7 +118,7 @@ if ! LC_ALL=C awk '
   function placeholder(value) {
     return value ~ /^(\[redacted( (value|password|api key|secret key|access token|token))?\]|\[hidden\]|\[masked\]|<redacted>)$/
   }
-  function sensitive(source,    lower, rest, value, url, authority, info, at, offset, colon) {
+  function sensitive(source,    lower, rest, value, url, authority, info, at, offset, colon, end) {
     lower = tolower(source)
     rest = lower
     while (match(rest, /(^|[^[:alnum:]_])(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)|aws_secret_access_key)[[:space:]]*[:=][[:space:]]*/)) {
@@ -133,6 +133,7 @@ if ! LC_ALL=C awk '
     rest = lower
     while (match(rest, /(^|[^[:alnum:]_])(postgres(ql)?|mysql|mongodb(\+srv)?|rediss?|amqps?|https?):\/\/[^[:space:]\/?#<>"\047)]+/)) {
       url = substr(rest, RSTART, RLENGTH)
+      end = RSTART + RLENGTH
       authority = url
       sub(/^.*:\/\//, "", authority)
       info = authority
@@ -151,7 +152,7 @@ if ! LC_ALL=C awk '
           if (value != "" && !placeholder(value)) return 1
         }
       }
-      rest = substr(rest, RSTART + RLENGTH)
+      rest = substr(rest, end)
     }
     return 0
   }
