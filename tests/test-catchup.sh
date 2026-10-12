@@ -215,4 +215,68 @@ printf 'GITHUB_TOKEN=ghp_exampletoken123456\\n' >> "$fixture/my project/docs/ove
 if bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" >/dev/null 2>&1; then
   printf 'Validator accepted token value\\n' >&2; exit 1
 fi
+
+# Credential checks are exercised through the installed validator CLI, with a
+# complete overview so structural validation cannot mask an unsafe value.
+for unsafe in \
+  'DB_PASSWORD=short' \
+  'SERVICE_API_KEY: abc123' \
+  'CI_ACCESS_TOKEN=abc123' \
+  'AUTH_SECRET_KEY: abc123' \
+  'APP_TOKEN=abc123' \
+  'AWS_SECRET_ACCESS_KEY=abc123' \
+  'DB_PASSWORD=[actualSecret]' \
+  'APP_TOKEN=<actualSecret>' \
+  'DB_PASSWORD=[REDACTED]actualSecret' \
+  'DB_PASSWORD=[REDACTED],realpass' \
+  'DB_PASSWORD=[REDACTED], realpass' \
+  'APP_TOKEN=<redacted>actualSecret' \
+  'DB_PASSWORD=[actual Secret]' \
+  'mongodb+srv://user:secret123@cluster.example/app' \
+  'rediss://user:secret123@cache.example/0' \
+  'amqps://user:secret123@queue.example/' \
+  'postgresql://user:secret123@db.example/app' \
+  'postgresql://user:realpass%3A[REDACTED]@db.example/app' \
+  'postgresql://user%3Arealpass:[REDACTED]@db.example/app' \
+  'postgresql://user:[actualSecret]@db.example/app' \
+  'postgresql://user:[REDACTED PASSWORD]realpass@db.example/app' \
+  'postgresql://user%3A[REDACTED PASSWORD]realpass%40db.example/app' \
+  'postgresql://user%3A[actualSecret]%40db.example/app' \
+  'postgres://user:secret123@db.example/app' \
+  'mysql://user:p%40ssword@db.example/app' \
+  'mongodb://user:secret123@db.example/app' \
+  'redis://user%3Asecret123%40cache.example/0' \
+  'amqp://user:secret123@queue.example/' \
+  'http://user:secret123@web.example/' \
+  'https://user:secret123@web.example/'; do
+  cp "$fixture/clean-overview.md" "$fixture/my project/docs/overview.md"
+  printf '%s\n' "$unsafe" >> "$fixture/my project/docs/overview.md"
+  cp "$fixture/my project/docs/overview.md" "$fixture/submitted-overview.md"
+  if diagnostic="$(bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" 2>&1)"; then
+    printf 'Validator accepted credential-bearing overview\n' >&2
+    exit 1
+  fi
+  [[ "$diagnostic" != *"$unsafe"* ]] || { printf 'Validator repeated a suspected credential\n' >&2; exit 1; }
+  [[ -n "$diagnostic" ]] || { printf 'Validator gave no safe diagnostic\n' >&2; exit 1; }
+  cmp -s "$fixture/submitted-overview.md" "$fixture/my project/docs/overview.md" || {
+    printf 'Validator modified the submitted overview\n' >&2; exit 1;
+  }
+done
+cp "$fixture/clean-overview.md" "$fixture/my project/docs/overview.md"
+cat >> "$fixture/my project/docs/overview.md" <<'DOC'
+DB_PASSWORD
+API_KEY_NAME=configuration
+TOKEN_ENDPOINT=https://web.example/path
+SERVICE_API_KEY=[REDACTED]
+APP_TOKEN: [example-token]
+DB_PASSWORD=<redacted>
+SERVICE_API_KEY=[REDACTED PASSWORD]
+DB_PASSWORD=[REDACTED], APP_TOKEN=[EXAMPLE TOKEN]
+APP_TOKEN: [example token]
+postgresql://user:[REDACTED]@db.example/app
+postgresql://user:[REDACTED PASSWORD]@db.example/app
+postgresql://user%3A[example password]%40db.example/app
+The application reads PASSWORD from its environment but this overview has no value.
+DOC
+bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
 printf 'Catch-up shell scenarios passed.\n'
