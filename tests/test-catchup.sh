@@ -37,15 +37,47 @@ done
 for excluded in node_modules dist build .git generated; do
   printf 'skip\n' > "$fixture/my project/$excluded/app/page.tsx"
 done
+mkdir -p "$fixture/my project/app/(dashboard)/reports/2026/quarter/one" \
+  "$fixture/my project/src/app/blog/(archive)/year/month/day" \
+  "$fixture/my project/app/_private/(group)" \
+  "$fixture/my project/app/(dashboard)/_internal/nested" \
+  "$fixture/my project/src/app/blog/_draft/nested" \
+  "$fixture/my project/app/reports" \
+  "$fixture/my project/apps/web/one/two/three/four"
+for candidate in \
+  "app/(dashboard)/reports/2026/quarter/one/page.tsx" \
+  "src/app/blog/(archive)/year/month/day/layout.jsx"; do
+  printf 'candidate\n' > "$fixture/my project/$candidate"
+done
+for excluded in \
+  "app/_private/(group)/page.tsx" \
+  "app/(dashboard)/_internal/nested/layout.js" \
+  "src/app/blog/_draft/nested/page.jsx" \
+  "app/reports/page.md" "app/reports/layout.md" \
+  "app/reports/page.test.tsx" "app/reports/layout.test.tsx"; do
+  printf 'skip\n' > "$fixture/my project/$excluded"
+done
+printf 'skip\n' > "$fixture/my project/apps/web/one/two/three/four/main.go"
 entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/my project")"
 for candidate in \
   "app/page.tsx" "app/(dashboard)/layout.jsx" \
   "src/app/page.js" "src/app/blog/layout.tsx" "src/index.ts" \
-  "src/main.rs" "apps/web/main.go"; do
+  "src/main.rs" "apps/web/main.go" \
+  "app/(dashboard)/reports/2026/quarter/one/page.tsx" \
+  "src/app/blog/(archive)/year/month/day/layout.jsx"; do
   [[ "$entrypoints" == *"$candidate"* ]] || { printf 'Missing entrypoint candidate: %s\n' "$candidate" >&2; exit 1; }
 done
 for excluded in node_modules dist build .git generated; do
   [[ "$entrypoints" != *"$excluded/"* ]] || { printf 'Excluded entrypoint reported: %s\n' "$excluded" >&2; exit 1; }
+done
+for excluded in \
+  "app/_private/(group)/page.tsx" \
+  "app/(dashboard)/_internal/nested/layout.js" \
+  "src/app/blog/_draft/nested/page.jsx" \
+  "app/reports/page.md" "app/reports/layout.md" \
+  "app/reports/page.test.tsx" "app/reports/layout.test.tsx" \
+  "apps/web/one/two/three/four/main.go"; do
+  [[ "$entrypoints" != *"$excluded"* ]] || { printf 'Invalid entrypoint reported: %s\n' "$excluded" >&2; exit 1; }
 done
 mkdir -p "$fixture/app router only/src/app/(marketing)"
 printf 'page\n' > "$fixture/app router only/src/app/(marketing)/page.tsx"

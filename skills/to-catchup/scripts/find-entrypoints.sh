@@ -8,10 +8,20 @@ find "$root" \( -type d \( -name .git -o -name .worktrees -o -name node_modules 
   index($0, root) == 1 {
     path = substr($0, length(root) + 1)
     depth = split(path, parts, "/")
-    is_router = path ~ /^(app|src\/app)\/(.+\/)?(page|layout)\.[^\/]+$/
+    is_router = (parts[1] == "app" || (parts[1] == "src" && parts[2] == "app")) &&
+                parts[depth] ~ /^(page|layout)\.(js|jsx|tsx)$/
+    if (is_router) {
+      first_route_segment = (parts[1] == "app" ? 2 : 3)
+      for (segment = first_route_segment; segment < depth; segment++) {
+        if (parts[segment] ~ /^_/) {
+          is_router = 0
+          break
+        }
+      }
+    }
     is_existing = (path ~ /(^|\/)(src|app|pages|cmd|services|apps)\// || depth <= 2) &&
                   path !~ /(^|\/)(page|layout)\.[^\/]+$/
-    if (depth <= 5 && (is_router || is_existing)) {
+    if (is_router || (depth <= 5 && is_existing)) {
       if (++n <= 80) print path
     }
   }
