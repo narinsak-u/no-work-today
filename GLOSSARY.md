@@ -9,5 +9,5 @@ The latest commit whose changes have been fully represented in `docs/recap.md`. 
 _Avoid_: current HEAD, latest commit (unless it has been processed)
 
 **History batch**:
-A bounded range of up to 100 consecutive commits, processed oldest-to-newest during one recap invocation. The recap checkpoint advances only through commits represented in the recap.
+A bounded set of commits reviewed oldest-to-newest as part of one recap invocation. An invocation can review multiple history batches; it does not advance the recap checkpoint until the complete selected range is represented.
 _Avoid_: page (unless referring to Git output pagination)
