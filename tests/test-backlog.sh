@@ -15,12 +15,14 @@ printf 'TODO: built task\n' > "$root/dist/output.js"
 printf 'TODO: generated task\n' > "$root/generated/schema.go"
 printf 'TODO: fake embedded binary\000more data\n' > "$root/src/binary.dat"
 printf 'TODO: skip generated backlog\n' > "$root/docs/backlog.md"
+printf 'API_KEY=live-secret # TODO rotate\n' > "$root/.env"
+printf 'password=live-secret # TODO rotate\n' > "$root/src/config.yml"
 
 candidates="$(bash "$skill/scripts/find-todos.sh" "$root")"
 [[ "$candidates" == *'src/payments.go:1:'*'Add retries'* ]] || exit 1
 [[ "$candidates" == *'src/order file.go:1:'*'Preserve order'* ]] || exit 1
 [[ "$candidates" == *'notes.txt:1:'*'migration blockers'* ]] || exit 1
-[[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* ]] || exit 1
+[[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* && "$candidates" != *'live-secret'* ]] || exit 1
 
 non_git="$(bash "$skill/scripts/working-tree.sh" "$root")"
 [[ "$non_git" == *'GIT=none'* ]] || exit 1
@@ -127,6 +129,7 @@ invalid 's/\*\*Status:\*\* Todo/\*\*Status:\*\* Queued/' 'invalid status'
 invalid 's/\*\*Priority:\*\* High/\*\*Priority:\*\* Urgent/' 'invalid priority'
 invalid 's/\*\*Status:\*\* Todo/\*\*Status:\*\* Done/' 'section/status mismatch'
 invalid 's/\*\*Completion evidence:\*\* Commit abc1234/\*\*Completion evidence:\*\* —/' 'lost completion evidence'
+invalid 's|Payment capture failure in src/payments.go.|API_KEY=live-secret|' 'secret in backlog Context'
 cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 printf 'Backlog shell scenarios passed.\n'

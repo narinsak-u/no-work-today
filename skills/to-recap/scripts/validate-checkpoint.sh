@@ -28,7 +28,7 @@ awk '
 ' "$recap" || fail 'malformed or duplicate state fields'
 [[ $(awk '{sub(/\r$/, "")} NF {last=$0} END {print last}' "$recap") == '-->' ]] || fail 'state is not final'
 [[ $(awk '{sub(/\r$/, "")} /^-->$/ {print previous} {previous=$0}' "$recap") =~ ^output_sha256:\ [0-9a-f]{64}$ ]] || fail 'fingerprint is not immediately before state end'
-stored=$(awk '/^output_sha256: / {print $2}' "$recap")
+stored=$(awk '{sub(/\r$/, "")} /^output_sha256: / {print $2}' "$recap")
 if command -v sha256sum >/dev/null 2>&1; then
   actual=$(sed '/^output_sha256: /d' "$recap" | sha256sum | awk '{print $1}')
 else

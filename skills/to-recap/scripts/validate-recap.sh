@@ -59,7 +59,7 @@ if [[ -n $selected ]]; then
     END {for (i=1;i<=n;i++) if(found[ids[i]]!=1) bad=1; if (bad) exit 1}
   ' "$selected" "$recap" || fail 'selected commits missing or repeated'
   last=$(awk 'NF {last=$0} END {print last}' "$selected")
-  checkpoint=$(awk '/^last_commit: / {print $2}' "$recap")
+  checkpoint=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$recap")
   [[ -z $last || $last == "$checkpoint" ]] || fail 'checkpoint does not match final selected commit'
   head=$(git -C "$repo" rev-parse HEAD)
   [[ $checkpoint == "$head" ]] || fail 'full range not represented at checkpoint'
@@ -75,13 +75,18 @@ if [[ -n $selected ]]; then
       bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" >/dev/null ||
         fail 'original recap boundary unsafe'
     fi
-    base=$(awk '/^last_commit: / {print $2}' "$source_recap")
+    # All published content before the mutable Current Point is append-only:
+    # existing Scope and dated entries must be the exact prefix of the draft.
+    prefix_bytes=$(sed '/^## Current Point/,$d' "$source_recap" | wc -c)
+    cmp -s -n "$prefix_bytes" <(sed '/^## Current Point/,$d' "$source_recap") <(sed '/^## Current Point/,$d' "$recap") ||
+      fail 'previous recap entries changed'
+    base=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$source_recap")
     [[ $base =~ ^[0-9a-f]{40,64}$ ]] &&
       git -C "$repo" merge-base --is-ancestor "$base" "$head" ||
       fail 'original checkpoint not an ancestor'
     if grep -q '^history_head: ' "$source_recap"; then
-      history_head=$(awk '/^history_head: / {print $2}' "$source_recap")
-      pending_ids=$(awk '/^pending_commits: / {print substr($0,18)}' "$source_recap")
+      history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$source_recap")
+      pending_ids=$(awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$source_recap")
       [[ -n $pending_ids ]] || fail 'original pending queue missing'
       if [[ $pending_ids == none ]]; then
         cmp -s "$selected" <(git -C "$repo" rev-list --topo-order --reverse "$history_head..$head") ||
@@ -101,11 +106,11 @@ if [[ -n $selected ]]; then
     fi
   fi
   branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
-  grep -Fqx -- "- **HEAD:** \`$head\` on \`$branch\`" "$recap" || fail 'Current Point HEAD or branch disagrees with Git'
-  grep -Fqx -- "- **Recap checkpoint:** \`$checkpoint\`" "$recap" || fail 'Current Point checkpoint disagrees with state'
-  grep -Fqx -- '- **Pending committed history:** None' "$recap" || fail 'selected history still marked pending'
+  sed 's/\r$//' "$recap" | grep -Fx -- "- **HEAD:** \`$head\` on \`$branch\`" >/dev/null || fail 'Current Point HEAD or branch disagrees with Git'
+  sed 's/\r$//' "$recap" | grep -Fx -- "- **Recap checkpoint:** \`$checkpoint\`" >/dev/null || fail 'Current Point checkpoint disagrees with state'
+  sed 's/\r$//' "$recap" | grep -Fx -- '- **Pending committed history:** None' >/dev/null || fail 'selected history still marked pending'
   if grep -q '^pending_commits: ' "$recap"; then
-    grep -q '^pending_commits: none$' "$recap" || fail 'pending commits left unrepresented'
+    sed 's/\r$//' "$recap" | grep -Fx -- 'pending_commits: none' >/dev/null || fail 'pending commits left unrepresented'
   fi
 fi
 printf 'recap valid: %s\n' "$recap"

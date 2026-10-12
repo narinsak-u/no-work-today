@@ -37,12 +37,12 @@ git -C "$repo" rev-list --topo-order --reverse "$checkpoint..$head" > "$expected
 : > "$actual"
 for ((offset=0; offset<1007; offset+=100)); do
   page="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" "$offset" "$head")"
-  [[ "$page" == *"total: 1007"* && "$page" == *"offset: $offset"* ]]
+  [[ "$page" == *"total: 1007"* && "$page" == *"offset: $offset"* ]] || exit 1
   count="$(printf '%s\n' "$page" | awk '/^commit: / {n++} END {print n+0}')"
   if ((offset + 100 < 1007)); then
-    [[ "$count" == 100 && "$page" == *"has_more: yes"* ]]
+    [[ "$count" == 100 && "$page" == *"has_more: yes"* ]] || exit 1
   else
-    [[ "$count" == 7 && "$page" == *"has_more: no"* ]]
+    [[ "$count" == 7 && "$page" == *"has_more: no"* ]] || exit 1
   fi
   printf '%s\n' "$page" | awk '/^commit: / {print $2}' >> "$actual"
 done
@@ -75,7 +75,7 @@ cat > "$recap" <<DOC
 - **Status:** Completed
 - **What / why:** Confirmed history.
 - **Important files:**
-  - `file 1` — added in this commit.
+  - \`file 1\` — added in this commit.
 - **Commits:** \`$files_commit\`
 - **Impact:** Unknown
 - **Junior notes:** None.
@@ -100,12 +100,40 @@ awk -v hash="$hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$recap" > 
 cp "$fixture/signed" "$recap"
 bash "$skill/scripts/validate-checkpoint.sh" "$repo" "$recap"
 bash "$skill/scripts/validate-recap.sh" "$repo" "$recap"
+awk '/^output_sha256:/ {next} {printf "%s\r\n", $0}' "$recap" > "$fixture/crlf-unsigned"
+crlf_hash="$( (sha256sum "$fixture/crlf-unsigned" 2>/dev/null || shasum -a 256 "$fixture/crlf-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$crlf_hash" '{sub(/\r$/, ""); if ($0=="-->") printf "output_sha256: %s\r\n", hash; printf "%s\r\n", $0}' "$fixture/crlf-unsigned" > "$fixture/crlf-recap"
+bash "$skill/scripts/validate-checkpoint.sh" "$repo" "$fixture/crlf-recap"
 printf '%s\n' "$files_commit" > "$fixture/selected"
 previous="$(git -C "$repo" rev-parse "$files_commit^")"
 awk -v base="$previous" '/^last_commit: / {print "last_commit: " base; next} /^output_sha256: / {next} {print}' "$recap" > "$fixture/prior-unsigned"
 prior_hash="$( (sha256sum "$fixture/prior-unsigned" 2>/dev/null || shasum -a 256 "$fixture/prior-unsigned") | awk 'NR==1 {print $1}')"
 awk -v hash="$prior_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/prior-unsigned" > "$fixture/prior-recap"
 bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/selected" "$files_commit" "$fixture/prior-recap"
+awk '{printf "%s\r\n", $0}' "$fixture/prior-unsigned" > "$fixture/prior-crlf-unsigned"
+prior_crlf_hash="$( (sha256sum "$fixture/prior-crlf-unsigned" 2>/dev/null || shasum -a 256 "$fixture/prior-crlf-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$prior_crlf_hash" '{sub(/\r$/, ""); if ($0=="-->") printf "output_sha256: %s\r\n", hash; printf "%s\r\n", $0}' "$fixture/prior-crlf-unsigned" > "$fixture/prior-crlf-recap"
+bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/crlf-recap" "$fixture/selected" "$files_commit" "$fixture/prior-crlf-recap"
+awk -v prior="$previous" '
+  /^## Current Point$/ {
+    print "## 2026-10-11 — Earlier work"
+    print "- **Category:** testing"
+    print "- **Status:** Completed"
+    print "- **What / why:** Initial fixture history."
+    print "- **Important files:** none"
+    print "- **Commits:** `" prior "` — prior commit"
+    print "- **Impact:** Unknown"
+    print "- **Junior notes:** None."
+    print "- **Verification:** not run"
+  }
+  { print }
+' "$fixture/prior-unsigned" > "$fixture/history-unsigned"
+history_hash="$( (sha256sum "$fixture/history-unsigned" 2>/dev/null || shasum -a 256 "$fixture/history-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$history_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/history-unsigned" > "$fixture/history-recap"
+if history_error="$(bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/selected" "$files_commit" "$fixture/history-recap" 2>&1)"; then
+  echo 'Validator accepted removal of an earlier recap entry' >&2; exit 1
+fi
+[[ "$history_error" == *'previous recap entries changed'* ]] || { printf 'Wrong rejection: %s\n' "$history_error" >&2; exit 1; }
 awk -v base="$checkpoint" '/^last_commit: / {print "last_commit: " base; next} /^output_sha256: / {next} {print}' "$recap" > "$fixture/old-unsigned"
 old_hash="$( (sha256sum "$fixture/old-unsigned" 2>/dev/null || shasum -a 256 "$fixture/old-unsigned") | awk 'NR==1 {print $1}')"
 awk -v hash="$old_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/old-unsigned" > "$fixture/old-recap"
