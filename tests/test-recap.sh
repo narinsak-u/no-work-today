@@ -115,6 +115,7 @@ sign_candidate() {
 }
 for detail in \
   'DB_PASSWORD=redRecapPassword29' \
+  'AWS_SECRET_ACCESS_KEY=redRecapAws29' \
   'SERVICE_API_KEY: redRecapApiKey29' \
   'AUTH_ACCESS_TOKEN=redRecapAccess29' \
   'CACHE_SECRET_KEY: redRecapSecret29' \

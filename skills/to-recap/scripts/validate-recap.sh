@@ -50,7 +50,7 @@ if LC_ALL=C awk '
     # Look at the value, not just the key: names and redaction placeholders
     # are safe, while a namespace prefix cannot hide a credential assignment.
     rest=line
-    while (match(rest, /(^|[^[:alnum:]_])([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)[[:space:]]*[:=][[:space:]]*/)) {
+    while (match(rest, /(^|[^[:alnum:]_])([[:alnum:]_]+_)?(aws_secret_access_key|password|api_key|access_token|secret_key|token)[[:space:]]*[:=][[:space:]]*/)) {
       value=substr(rest, RSTART+RLENGTH)
       if (value !~ /^$/ && !placeholder(value)) bad=1
       rest=substr(rest, RSTART+RLENGTH)
