@@ -19,7 +19,7 @@ Create or update one evidence-based onboarding document at `docs/overview.md`. T
 
 ## Workflow
 
-1. Establish the repository root and inspect the top-level layout, package or dependency manifests, and existing documentation. Look for `docs/recap.md` and `docs/backlog.md` without assuming they exist.
+1. Establish the repository root. Run this skill's `scripts/scan-project.sh`, `scripts/detect-stack.sh`, and `scripts/find-entrypoints.sh` with the target repository root as their argument (invoke via an absolute path resolved from this skill directory, not a path inside the target project). The scripts report bounded inventory, manifest-based stack evidence, and **entrypoint candidates**, not architectural conclusions. Look for `docs/recap.md` and `docs/backlog.md` without assuming they exist. If a helper fails, inspect the relevant files directly; never turn missing script output into an inferred fact.
 2. Inspect the repository areas that establish behavior and day-to-day work:
    - application entry points, startup/bootstrap code, and executable commands;
    - authentication and authorization boundaries, session or identity handling, and security-sensitive middleware;
@@ -43,7 +43,7 @@ Create or update one evidence-based onboarding document at `docs/overview.md`. T
    - If an existing output contains the `output_sha256` field, recompute the hash using that rule. If it is well-formed and matches, it is safe for this skill to update even when Git reports staged or unstaged changes to `docs/overview.md`. After every permitted update, recalculate and replace the fingerprint. If the field is malformed, duplicated, or mismatched, stop without writing and ask how to preserve or merge the edits.
    - If an existing output has no `output_sha256` field, adopt it only when it is a clean, tracked legacy file in a Git repository: verify it is tracked and `git status --short -- docs/overview.md` reports no staged or unstaged changes. Add the fingerprint with the next complete update. If it is untracked, modified, or in a non-Git repository, stop without writing and ask for direction; do not treat non-Git content as clean.
 9. Write the result to `docs/overview.md` only after the ownership check permits the update. Preserve the existing overview structure and all unrelated files; do not modify, rename, or delete unrelated documentation, source files, configuration, or generated artifacts.
-10. Re-read the result and check that it explains flows before inventories, covers all template sections, contains no secret values or unsupported claims, has a valid fingerprint, and leaves unrelated files untouched. Confirm the ownership guard passed before writing.
+10. Re-read the result, run this skill's `scripts/validate-overview.sh` on `docs/overview.md`, and correct any structural or obvious secret warning before finishing. The validator is read-only and cannot establish architectural correctness: separately check that the document explains flows before inventories, contains no unsupported claims, has a valid fingerprint, and leaves unrelated files untouched. Confirm the ownership guard passed before writing.
 
 ## Completion Criteria
 
