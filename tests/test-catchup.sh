@@ -25,6 +25,74 @@ entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/my project")"
 [[ "$entrypoints" == *"src/main.rs"* && "$entrypoints" == *"apps/web/main.go"* ]] || exit 1
 [[ "$entrypoints" != *"node_modules"* && "$entrypoints" != *".venv"* && "$entrypoints" != *"generated"* && "$entrypoints" != *".worktrees"* ]] || exit 1
 
+# App Router pages and layouts are leads, including in a project with no main/index file.
+mkdir -p "$fixture/my project/app/(dashboard)" "$fixture/my project/src/app/blog" \
+  "$fixture/my project/node_modules/app" "$fixture/my project/dist/app" \
+  "$fixture/my project/build/app" "$fixture/my project/.git/app" "$fixture/my project/generated/app"
+for candidate in \
+  "app/page.tsx" "app/(dashboard)/layout.jsx" "app/(dashboard)/page.ts" \
+  "src/app/page.js" "src/app/blog/layout.tsx" "src/app/blog/layout.ts" "src/index.ts"; do
+  printf 'candidate\n' > "$fixture/my project/$candidate"
+done
+for excluded in node_modules dist build .git generated; do
+  printf 'skip\n' > "$fixture/my project/$excluded/app/page.tsx"
+done
+mkdir -p "$fixture/my project/app/(dashboard)/reports/2026/quarter/one" \
+  "$fixture/my project/src/app/blog/(archive)/year/month/day" \
+  "$fixture/my project/app/_private/(group)" \
+  "$fixture/my project/app/(dashboard)/_internal/nested" \
+  "$fixture/my project/src/app/blog/_draft/nested" \
+  "$fixture/my project/app/reports" \
+  "$fixture/my project/apps/web/one/two/three/four"
+for candidate in \
+  "app/(dashboard)/reports/2026/quarter/one/page.tsx" \
+  "src/app/blog/(archive)/year/month/day/layout.jsx"; do
+  printf 'candidate\n' > "$fixture/my project/$candidate"
+done
+for excluded in \
+  "app/_private/(group)/page.tsx" \
+  "app/(dashboard)/_internal/nested/layout.js" \
+  "src/app/blog/_draft/nested/page.jsx" \
+  "app/reports/page.md" "app/reports/layout.md" \
+  "app/reports/page.test.tsx" "app/reports/layout.test.tsx"; do
+  printf 'skip\n' > "$fixture/my project/$excluded"
+done
+printf 'skip\n' > "$fixture/my project/apps/web/one/two/three/four/main.go"
+entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/my project")"
+for candidate in \
+  "app/page.tsx" "app/(dashboard)/layout.jsx" "app/(dashboard)/page.ts" \
+  "src/app/page.js" "src/app/blog/layout.tsx" "src/app/blog/layout.ts" "src/index.ts" \
+  "src/main.rs" "apps/web/main.go" \
+  "app/(dashboard)/reports/2026/quarter/one/page.tsx" \
+  "src/app/blog/(archive)/year/month/day/layout.jsx"; do
+  [[ "$entrypoints" == *"$candidate"* ]] || { printf 'Missing entrypoint candidate: %s\n' "$candidate" >&2; exit 1; }
+done
+for excluded in node_modules dist build .git generated; do
+  [[ "$entrypoints" != *"$excluded/"* ]] || { printf 'Excluded entrypoint reported: %s\n' "$excluded" >&2; exit 1; }
+done
+for excluded in \
+  "app/_private/(group)/page.tsx" \
+  "app/(dashboard)/_internal/nested/layout.js" \
+  "src/app/blog/_draft/nested/page.jsx" \
+  "app/reports/page.md" "app/reports/layout.md" \
+  "app/reports/page.test.tsx" "app/reports/layout.test.tsx" \
+  "apps/web/one/two/three/four/main.go"; do
+  [[ "$entrypoints" != *"$excluded"* ]] || { printf 'Invalid entrypoint reported: %s\n' "$excluded" >&2; exit 1; }
+done
+mkdir -p "$fixture/app router only/src/app/(marketing)"
+printf 'page\n' > "$fixture/app router only/src/app/(marketing)/page.ts"
+printf 'layout\n' > "$fixture/app router only/src/app/layout.ts"
+entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/app router only")"
+[[ "$entrypoints" == *"src/app/(marketing)/page.ts"* && "$entrypoints" == *"src/app/layout.ts"* ]] || exit 1
+
+mkdir -p "$fixture/many routes/app"
+for ((n=1; n<=82; n++)); do
+  mkdir -p "$fixture/many routes/app/route-$n"
+  printf 'page\n' > "$fixture/many routes/app/route-$n/page.tsx"
+done
+entrypoints="$(bash "$skill/scripts/find-entrypoints.sh" "$fixture/many routes")"
+[[ "$(printf '%s\n' "$entrypoints" | wc -l | tr -d ' ')" -eq 81 && "$entrypoints" == *'2 additional candidates omitted'* ]] || exit 1
+
 mkdir -p "$fixture/rust only" "$fixture/go only"
 printf '[package]\nname = "demo"\n' > "$fixture/rust only/Cargo.toml"
 printf 'module example.test/demo\n' > "$fixture/go only/go.mod"
