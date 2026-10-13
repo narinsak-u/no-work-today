@@ -42,3 +42,7 @@ Commands are declared in `package.json` and documented in `README.md`; they were
 - Keep signing keys, client credentials, SMTP credentials and dotenvx keys outside this document. Never copy values from `.env*`, seed files or local Compose configuration.
 - Node/pnpm versions conflict across `mise.toml`, `Dockerfile` and `package.json`. Deployment secret injection, external service availability and release ownership need verification; repository configuration describes intent, not successful operation.
 - Generated `dist/` and Prisma client files should not be edited directly. `migrate-user-to-k2-db.ts` is an ad-hoc outbound migration; its operational use is unknown. Review before running any data-changing or external-action script.
+
+<!-- skill-state
+output_sha256: baa5d0acf5ee25b609d0158618c754a5aac5865cc35ec2456b553587c3d3f5e7
+-->

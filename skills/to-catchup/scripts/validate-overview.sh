@@ -56,3 +56,37 @@ if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|
   printf 'Overview contains a possible secret; remove its value before sharing\n' >&2
   exit 1
 fi
+
+# A fingerprint is optional for clean legacy overviews. When present, validate
+# it without modifying any submitted bytes.
+fingerprints="$(LC_ALL=C awk '
+  /^output_sha256:/ {
+    count++
+    sub(/\r$/, "")
+    if ($0 !~ /^output_sha256: [0-9a-f]+$/ || length($0) != 79) bad = 1
+    else expected = substr($0, 16)
+  }
+  END { if (bad || count > 1) exit 1; if (count) print expected }
+' "$file")" || {
+  printf 'Overview has an invalid output_sha256 fingerprint\n' >&2
+  exit 1
+}
+if [[ -n "$fingerprints" ]]; then
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(LC_ALL=C sed '/^output_sha256: /d' "$file" | sha256sum)"
+    actual="${actual%% *}"
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(LC_ALL=C sed '/^output_sha256: /d' "$file" | shasum -a 256)"
+    actual="${actual%% *}"
+  elif command -v openssl >/dev/null 2>&1; then
+    actual="$(LC_ALL=C sed '/^output_sha256: /d' "$file" | openssl dgst -sha256)"
+    actual="${actual##* }"
+  else
+    printf 'Overview: SHA-256 utility unavailable (sha256sum, shasum, or openssl required)\n' >&2
+    exit 1
+  fi
+  [[ "$actual" == "$fingerprints" ]] || {
+    printf 'Overview fingerprint mismatch; preserve user edits\n' >&2
+    exit 1
+  }
+fi

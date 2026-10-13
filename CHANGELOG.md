@@ -6,6 +6,7 @@ All notable changes to this repository are documented here. Releases follow sema
 - Bound each recap invocation to 100 commits, preserve an oldest-first continuation checkpoint, and put new plain-language summaries ahead of collapsed technical evidence.
 - Restored catchup protection for credential-bearing URL user-info and prefixed credential assignments, including short secret values, while allowing recognized redaction placeholders.
 - Updated the catchup shell seam coverage and added a readable recap example with explicit checkpoint and pending-history state.
+- Catchup validation now verifies an included `output_sha256` fingerprint without rejecting clean legacy files that predate fingerprints.
 
 - Fixed credential guards for quoted redaction markers, comma/semicolon-adjacent values, and percent-encoded URL hosts; signed recap validation now advances past credential assignments without hanging.
 - Suppressed standalone credential tokens in backlog TODO helper output while retaining safe lead locations, and accepted only recognized multiword redaction labels in credential assignments.

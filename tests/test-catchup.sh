@@ -128,4 +128,21 @@ for safe in 'API_KEY=[REDACTED]' 'SERVICE_TOKEN=<YOUR TOKEN>'; do
   printf '%s\n' "$safe" >> "$fixture/candidate.md"
   bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md"
 done
+cp "$fixture/my project/docs/overview.md" "$fixture/fingerprinted.md"
+cat >> "$fixture/fingerprinted.md" <<'DOC'
+<!-- skill-state
+output_sha256: FINGERPRINT
+-->
+DOC
+digest="$(LC_ALL=C sed '/^output_sha256: /d' "$fixture/fingerprinted.md" | (sha256sum 2>/dev/null || shasum -a 256) | awk '{print $1}')"
+awk -v digest="$digest" '{sub(/output_sha256: FINGERPRINT/, "output_sha256: " digest); print}' "$fixture/fingerprinted.md" > "$fixture/signed-overview.md"
+bash "$skill/scripts/validate-overview.sh" "$fixture/signed-overview.md"
+cp "$fixture/signed-overview.md" "$fixture/stale-overview.md"
+printf 'User edit\n' >> "$fixture/stale-overview.md"
+cp "$fixture/stale-overview.md" "$fixture/stale-before.md"
+if bash "$skill/scripts/validate-overview.sh" "$fixture/stale-overview.md" >/dev/null 2>&1; then
+  printf 'Validator accepted a stale overview fingerprint\n' >&2
+  exit 1
+fi
+cmp "$fixture/stale-before.md" "$fixture/stale-overview.md"
 printf 'Catch-up shell scenarios passed.\n'
