@@ -56,7 +56,8 @@ initial_repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo")"
 [[ "$initial_repeat" == *"mode: initial"* && "$initial_repeat" == *"total: 100"* && "$initial_repeat" == *"has_more: no"* ]] || exit 1
 repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$head" 0 "$head")"
 [[ "$repeat" == *"total: 0"* && "$repeat" == *"has_more: no"* ]] || exit 1
-if bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" 0 "$checkpoint" >/dev/null 2>&1; then
+git -C "$repo" commit --allow-empty -qm 'move HEAD after the captured history batch'
+if bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" 0 "$head" >/dev/null 2>&1; then
   echo 'Collector accepted changed HEAD' >&2; exit 1
 fi
 if bash "$skill/scripts/collect-git-context.sh" "$repo" "$initial" 100 "$head" >/dev/null 2>&1; then
@@ -161,7 +162,7 @@ do
     echo 'Validator accepted a signed credential-bearing recap' >&2; exit 1
   fi
   [[ "$rejection" == *'possible secret value'* && "$rejection" != *"$detail"* ]] ||
-    { echo 'Unsafe or unexpected recap rejection diagnostic' >&2; exit 1; }
+    { printf 'Unsafe or unexpected recap rejection diagnostic for %s: %s\n' "$detail" "$rejection" >&2; exit 1; }
   [[ "$(git -C "$repo" hash-object "$recap")" == "$published_digest" ]] ||
     { echo 'Rejected draft changed published recap' >&2; exit 1; }
 done

@@ -11,6 +11,7 @@ recap=$2
 selected=${3:-}
 expected_head=${4:-}
 source_recap=${5:-}
+fail() { echo "invalid recap: $*" >&2; exit 1; }
 expected_dir=$(mktemp -d "${TMPDIR:-/tmp}/recap-validation.XXXXXX")
 trap 'rm -rf "$expected_dir"' EXIT
 fixture_expected_initial="$expected_dir/initial"
