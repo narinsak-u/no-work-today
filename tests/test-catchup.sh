@@ -89,4 +89,43 @@ printf 'GITHUB_TOKEN=ghp_exampletoken123456\\n' >> "$fixture/my project/docs/ove
 if bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" >/dev/null 2>&1; then
   printf 'Validator accepted token value\\n' >&2; exit 1
 fi
+cat > "$fixture/my project/docs/overview.md" <<'DOC'
+# Project Overview
+## Purpose
+A fictional service.
+## Project Tree
+```text
+src/
+```
+## Workflow
+```text
+request → service → response
+```
+## Scripts
+- `pnpm prisma:migrate` — changes the database; confirm the target database before running.
+- `node scripts/export.js` — writes an export file; review its destination first.
+## Important Notes
+- Use `DATABASE_URL=[REDACTED]` in examples; never copy a live connection string.
+DOC
+bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
+grep -Fq 'changes the database; confirm the target database before running' "$fixture/my project/docs/overview.md"
+grep -Fq 'review its destination first' "$fixture/my project/docs/overview.md"
+for unsafe in \
+  'postgresql://reader:catchupUserInfoSecret29@db.example.test/app' \
+  'SERVICE_DATABASE_PASSWORD=catchupAssignmentSecret29' \
+  'SERVICE_API_KEY=x' \
+  'TOKEN=abcde' \
+  'DATABASE_URL=[REDACTED], actual-secret'; do
+  cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
+  printf '%s\n' "$unsafe" >> "$fixture/candidate.md"
+  if bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md" >/dev/null 2>&1; then
+    printf 'Validator accepted unsafe credential example: %s\n' "$unsafe" >&2
+    exit 1
+  fi
+done
+for safe in 'API_KEY=[REDACTED]' 'SERVICE_TOKEN=<YOUR TOKEN>'; do
+  cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
+  printf '%s\n' "$safe" >> "$fixture/candidate.md"
+  bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md"
+done
 printf 'Catch-up shell scenarios passed.\n'

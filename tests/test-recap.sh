@@ -52,8 +52,8 @@ while [[ "$checkpoint" != "$head" ]]; do
   ((remaining -= count))
 done
 cmp "$expected" "$actual"
-repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$head")"
-[[ "$repeat" == *"total: 100"* && "$repeat" == *"has_more: no"* ]] || exit 1
+initial_repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo")"
+[[ "$initial_repeat" == *"mode: initial"* && "$initial_repeat" == *"total: 100"* && "$initial_repeat" == *"has_more: no"* ]] || exit 1
 repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$head" 0 "$head")"
 [[ "$repeat" == *"total: 0"* && "$repeat" == *"has_more: no"* ]] || exit 1
 if bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" 0 "$checkpoint" >/dev/null 2>&1; then
