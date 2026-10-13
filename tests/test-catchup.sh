@@ -115,7 +115,7 @@ for unsafe in \
   'SERVICE_DATABASE_PASSWORD=catchupAssignmentSecret29' \
   'SERVICE_API_KEY=x' \
   'TOKEN=abcde' \
-  'DATABASE_URL=[REDACTED], actual-secret'; do
+  'DATABASE_PASSWORD=[REDACTED], actual-secret'; do
   cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
   printf '%s\n' "$unsafe" >> "$fixture/candidate.md"
   if bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md" >/dev/null 2>&1; then
