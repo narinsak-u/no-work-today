@@ -11,7 +11,11 @@ recap=$2
 selected=${3:-}
 expected_head=${4:-}
 source_recap=${5:-}
-fail() { echo "invalid recap: $*" >&2; exit 1; }
+expected_dir=$(mktemp -d "${TMPDIR:-/tmp}/recap-validation.XXXXXX")
+trap 'rm -rf "$expected_dir"' EXIT
+fixture_expected_initial="$expected_dir/initial"
+fixture_expected_history="$expected_dir/history"
+fixture_expected_batch="$expected_dir/batch"
 bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$recap" "$expected_head" >/dev/null || fail 'unsafe state or checkpoint'
 awk '
   {sub(/\r$/, "")}
@@ -94,8 +98,8 @@ if LC_ALL=C awk '
 fi
 if [[ -n $selected ]]; then
   [[ -f $selected ]] || fail 'commit list missing'
-  # Account for every selected commit only in dated work-entry commit fields,
-  # not in Current Point or other prose (including lookalike commit fields).
+  # Selected full IDs must occur exactly once in dated entries, inside their
+  # collapsed technical evidence; IDs in Current Point or prose do not count.
   awk '
     FILENAME==ARGV[1] {
       if ($0 !~ /^[0-9a-f]+$/ || (length($0)!=40 && length($0)!=64) || want[$0]++) bad=1
@@ -104,35 +108,47 @@ if [[ -n $selected ]]; then
     }
     /^## / {
       in_entry=($0 ~ /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] /)
+      in_details=0
     }
+    in_entry && /<details>/ {in_details=1}
+    in_entry && /<\/details>/ {in_details=0}
     in_entry && /^- \*\*Commits:\*\* / {
       parts=split($0, tokens, "`")
       for (i=2; i<parts; i+=2) {
         hash=tokens[i]
-        if (hash ~ /^[0-9a-f]+$/ && (length(hash)==40 || length(hash)==64)) found[hash]++
+        if (hash ~ /^[0-9a-f]+$/ && (length(hash)==40 || length(hash)==64)) {
+          found[hash]++
+          if (in_details) collapsed[hash]++
+        }
       }
     }
-    END {for (i=1;i<=n;i++) if(found[ids[i]]!=1) bad=1; if (bad) exit 1}
-  ' "$selected" "$recap" || fail 'selected commits missing or repeated'
+    END {
+      for (i=1;i<=n;i++) if(found[ids[i]]!=1 || collapsed[ids[i]]!=1) bad=1
+      if (bad) exit 1
+    }
+  ' "$selected" "$recap" || fail 'selected commits missing, repeated, or outside collapsed evidence'
+  selected_count=$(awk 'END {print NR+0}' "$selected")
+  (( selected_count <= 100 )) || fail 'invocation selected more than 100 commits'
   last=$(awk 'NF {last=$0} END {print last}' "$selected")
   checkpoint=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$recap")
   [[ -z $last || $last == "$checkpoint" ]] || fail 'checkpoint does not match final selected commit'
   head=$(git -C "$repo" rev-parse HEAD)
-  [[ $checkpoint == "$head" ]] || fail 'full range not represented at checkpoint'
-  # Derive the expected set from Git and the original boundary, not from
-  # the agent-supplied list alone: an omitted middle commit must fail.
   if [[ $source_recap == INITIAL ]]; then
-    cmp -s "$selected" <(git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
-      awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}') ||
+    expected_ids="$fixture_expected_initial"
+    git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
+      awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}' > "$expected_ids"
+    older='no'
+    if (( $(git -C "$repo" rev-list --count --max-count=101 "$head") > 100 )); then older='yes'; fi
+    cmp -s "$selected" "$expected_ids" ||
       fail 'selected history does not cover the complete initial window'
+    [[ $checkpoint == "$head" ]] || fail 'initial checkpoint must cover selected HEAD'
+    pending=no
   else
     [[ -f $source_recap ]] || fail 'original recap missing'
     if grep -q '^output_sha256: ' "$source_recap"; then
       bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" >/dev/null ||
         fail 'original recap boundary unsafe'
     fi
-    # All published content before the mutable Current Point is append-only:
-    # existing Scope and dated entries must be the exact prefix of the draft.
     prefix_bytes=$(sed '/^## Current Point/,$d' "$source_recap" | wc -c)
     cmp -s -n "$prefix_bytes" <(sed '/^## Current Point/,$d' "$source_recap") <(sed '/^## Current Point/,$d' "$recap") ||
       fail 'previous recap entries changed'
@@ -145,28 +161,46 @@ if [[ -n $selected ]]; then
       pending_ids=$(awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$source_recap")
       [[ -n $pending_ids ]] || fail 'original pending queue missing'
       if [[ $pending_ids == none ]]; then
-        cmp -s "$selected" <(git -C "$repo" rev-list --topo-order --reverse "$history_head..$head") ||
-          fail 'selected history does not cover the complete checkpoint range'
+        git -C "$repo" rev-list --topo-order --reverse "$history_head..$head" > "$fixture_expected_history"
       else
-        cmp -s "$selected" <(awk -v pending="$pending_ids" '
+        awk -v pending="$pending_ids" '
           BEGIN {split(pending, queue, " "); for (i in queue) want[queue[i]]=1}
           FILENAME==ARGV[1] {want[$0]=1; next}
           want[$0] {print}
-        ' <(git -C "$repo" rev-list "$history_head..$head") <(git -C "$repo" rev-list --topo-order --reverse "$head")) ||
-          fail 'selected history does not cover the complete pending range'
+        ' <(git -C "$repo" rev-list "$history_head..$head") <(git -C "$repo" rev-list --topo-order --reverse "$head") > "$fixture_expected_history"
       fi
+      expected_full="$fixture_expected_history"
     else
       grep -q '^pending_commits: ' "$source_recap" && fail 'original pending queue lacks history head'
-      cmp -s "$selected" <(git -C "$repo" rev-list --topo-order --reverse "$base..$head") ||
-        fail 'selected history does not cover the complete checkpoint range'
+      expected_full="$fixture_expected_history"
+      git -C "$repo" rev-list --topo-order --reverse "$base..$head" > "$expected_full"
+    fi
+    expected_batch="$fixture_expected_batch"
+    awk 'NR<=100' "$expected_full" > "$expected_batch"
+    cmp -s "$selected" "$expected_batch" || fail 'selected history does not cover the oldest pending batch'
+    [[ $checkpoint == "$(awk 'END {print}' "$expected_batch")" ]] ||
+      fail 'checkpoint does not match final selected commit'
+    pending_count=$(awk -v selected="$selected_count" 'NR>selected {n++} END {print n+0}' "$expected_full")
+    if (( pending_count > 0 )); then
+      pending=yes
+      next_unrepresented=$(awk -v selected="$selected_count" 'NR==selected+1 {print; exit}' "$expected_full")
+    else
+      pending=no
+      next_unrepresented=''
     fi
   fi
   branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
   sed 's/\r$//' "$recap" | grep -Fx -- "- **HEAD:** \`$head\` on \`$branch\`" >/dev/null || fail 'Current Point HEAD or branch disagrees with Git'
   sed 's/\r$//' "$recap" | grep -Fx -- "- **Recap checkpoint:** \`$checkpoint\`" >/dev/null || fail 'Current Point checkpoint disagrees with state'
-  sed 's/\r$//' "$recap" | grep -Fx -- '- **Pending committed history:** None' >/dev/null || fail 'selected history still marked pending'
-  if grep -q '^pending_commits: ' "$recap"; then
-    sed 's/\r$//' "$recap" | grep -Fx -- 'pending_commits: none' >/dev/null || fail 'pending commits left unrepresented'
+  if [[ $pending == yes ]]; then
+    sed 's/\r$//' "$recap" | grep -Fx -- "- **Pending committed history:** $pending_count commits remain; oldest unrepresented: \`$next_unrepresented\`" >/dev/null ||
+      fail 'pending committed history does not match the remaining batch'
+  else
+    sed 's/\r$//' "$recap" | grep -Fx -- '- **Pending committed history:** None' >/dev/null ||
+      fail 'completed history still marked pending'
+    if grep -q '^pending_commits: ' "$recap"; then
+      sed 's/\r$//' "$recap" | grep -Fx -- 'pending_commits: none' >/dev/null || fail 'pending commits left unrepresented'
+    fi
   fi
 fi
 printf 'recap valid: %s\n' "$recap"

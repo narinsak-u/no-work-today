@@ -27,7 +27,8 @@ git -C "$fixture/short history" -c user.email=recap@example.test -c user.name=Re
 short="$(bash "$skill/scripts/collect-git-context.sh" "$fixture/short history")"
 [[ "$short" == *"total: 2"* && "$short" == *"older_history: no"* ]] || exit 1
 
-# Every commit in a long delta must be reachable through bounded pages, without duplication.
+# Each invocation returns one bounded, oldest-first history batch. Advancing
+# the checkpoint to its final ID continues the next run without gaps.
 checkpoint="$head"
 for ((n=1; n<=1007; n++)); do git -C "$repo" commit --allow-empty -qm "delta $n"; done
 head="$(git -C "$repo" rev-parse HEAD)"
@@ -35,22 +36,31 @@ expected="$fixture/expected"
 actual="$fixture/actual"
 git -C "$repo" rev-list --topo-order --reverse "$checkpoint..$head" > "$expected"
 : > "$actual"
-for ((offset=0; offset<1007; offset+=100)); do
-  page="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" "$offset" "$head")"
-  [[ "$page" == *"total: 1007"* && "$page" == *"offset: $offset"* ]] || exit 1
+remaining=1007
+while [[ "$checkpoint" != "$head" ]]; do
+  page="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" 0 "$head")"
+  [[ "$page" == *"total: $remaining"* && "$page" == *"offset: 0"* ]] || exit 1
   count="$(printf '%s\n' "$page" | awk '/^commit: / {n++} END {print n+0}')"
-  if ((offset + 100 < 1007)); then
+  if ((remaining > 100)); then
     [[ "$count" == 100 && "$page" == *"has_more: yes"* ]] || exit 1
   else
-    [[ "$count" == 7 && "$page" == *"has_more: no"* ]] || exit 1
+    [[ "$count" == "$remaining" && "$page" == *"has_more: no"* ]] || exit 1
   fi
-  printf '%s\n' "$page" | awk '/^commit: / {print $2}' >> "$actual"
+  selected="$(printf '%s\n' "$page" | awk '/^commit: / {print $2}')"
+  printf '%s\n' "$selected" >> "$actual"
+  checkpoint="$(printf '%s\n' "$selected" | awk 'END {print}')"
+  ((remaining -= count))
 done
 cmp "$expected" "$actual"
 repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$head")"
+[[ "$repeat" == *"total: 100"* && "$repeat" == *"has_more: no"* ]] || exit 1
+repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo" "$head" 0 "$head")"
 [[ "$repeat" == *"total: 0"* && "$repeat" == *"has_more: no"* ]] || exit 1
 if bash "$skill/scripts/collect-git-context.sh" "$repo" "$checkpoint" 0 "$checkpoint" >/dev/null 2>&1; then
   echo 'Collector accepted changed HEAD' >&2; exit 1
+fi
+if bash "$skill/scripts/collect-git-context.sh" "$repo" "$initial" 100 "$head" >/dev/null 2>&1; then
+  echo 'Collector accepted another batch page in one invocation' >&2; exit 1
 fi
 if bash "$skill/scripts/collect-git-context.sh" "$repo" not-a-hash >/dev/null 2>&1; then
   echo 'Collector accepted invalid boundary' >&2; exit 1
@@ -74,12 +84,15 @@ cat > "$recap" <<DOC
 - **Category:** testing
 - **Status:** Completed
 - **What / why:** Confirmed history.
+<details>
+<summary>Technical details and commit evidence</summary>
 - **Important files:**
   - \`file 1\` — added in this commit.
 - **Commits:** \`$files_commit\`
-- **Impact:** Unknown
 - **Junior notes:** None.
 - **Verification:** not run
+</details>
+- **Impact:** Unknown
 ## Current Point
 - **HEAD:** \`$files_commit\` on \`$branch\`
 - **Recap checkpoint:** \`$files_commit\`
@@ -267,11 +280,14 @@ make_account_draft() {
       print "- **Category:** testing"
       print "- **Status:** Completed"
       print "- **What / why:** Account for the selected history."
+      print "<details>"
+      print "<summary>Technical details and commit evidence</summary>"
       print "- **Important files:** none"
       print "- **Commits:** " ids
-      print "- **Impact:** History represented."
       print "- **Junior notes:** None."
       print "- **Verification:** not run"
+      print "</details>"
+      print "- **Impact:** History represented."
       print
       print "- **HEAD:** `" latest "` on `" branch "`"
       print "- **Recap checkpoint:** `" latest "`"
@@ -296,7 +312,7 @@ reject_account_draft() {
   if error="$(bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_draft" "$fixture/account-selected" "$account_last" "$account_prior" 2>&1)"; then
     echo 'Validator accepted missing or repeated selected ID outside dated entries' >&2; exit 1
   fi
-  [[ "$error" == *'selected commits missing or repeated'* ]] || { printf 'Wrong rejection: %s\n' "$error" >&2; exit 1; }
+  [[ "$error" == *'selected commits missing'* ]] || { printf 'Wrong rejection: %s\n' "$error" >&2; exit 1; }
   [[ "$(git -C "$account_repo" hash-object "$account_prior")" == "$account_before" ]] || exit 1
   [[ "$(awk '/^last_commit: / {print $2}' "$account_prior")" == "$account_base" ]] || exit 1
 }

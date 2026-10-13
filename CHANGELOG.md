@@ -3,6 +3,7 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+- Bound each recap invocation to 100 commits, preserve an oldest-first continuation checkpoint, and put new plain-language summaries ahead of collapsed technical evidence.
 
 - Fixed credential guards for quoted redaction markers, comma/semicolon-adjacent values, and percent-encoded URL hosts; signed recap validation now advances past credential assignments without hanging.
 - Suppressed standalone credential tokens in backlog TODO helper output while retaining safe lead locations, and accepted only recognized multiword redaction labels in credential assignments.
