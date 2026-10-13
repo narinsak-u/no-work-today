@@ -6,7 +6,7 @@ Use this template for `docs/recap.md`; replace bracketed placeholders with verif
 
 - **Repository / worktree:** [repository and worktree]
 - **Branch:** [branch]
-- **Committed range:** Initial window: [oldest included full commit] through [initial HEAD], inclusive, covering at most the latest 100 unique reachable commits. [State explicitly whether older history exists outside this initial coverage; for an inherited recap preserve its previously verified boundary.]
+- **Committed range:** Initial window: [oldest included full commit] through [initial HEAD], inclusive, covering the latest 100 eligible commits at most. [State whether older history exists outside initial coverage; for an inherited recap preserve its verified boundary.]
 - **Working-tree inclusion:** Committed and uncommitted work are reported separately.
 - **Context consulted:** [optional `docs/overview.md` / `docs/backlog.md`, or `None found`]
 
@@ -14,19 +14,25 @@ Use this template for `docs/recap.md`; replace bracketed placeholders with verif
 
 - **Category:** [features | fixes | refactors | infrastructure | testing | documentation | security | performance]
 - **Status:** [Completed | Partial | In progress | Blocked | Needs verification]
-- **What / why:** [evidence-backed change and reason, or `Unknown`]
+- **What / why:** [One or two plain-language sentences stating the outcome and who or what benefits.]
+- **Impact:** [Supported user or project impact in plain language, or `Unknown`]
+
+<details>
+<summary>Technical details and commit evidence</summary>
+
 - **Important files:**
-  - `[path]` — [role of the change; use `None` for an empty commit]
-- **Commits:** `[full hash]` — [subject or grouped related commits; list EVERY selected full hash exactly once in a work entry]
-- **Impact:** [supported result or `Unknown`]
-- **Junior notes:** [plain-language context and safe next reading step]
+  - `[path]` — [verified role; use `None` for an empty commit]
+- **Commits:** `[full hash]` — [concise technical note; list every selected full hash exactly once]
+- **Junior notes:** [optional next reading step or explanation]
 - **Verification:** [observed command and outcome, `not run`, `unknown`, or `reported by commit`]
+
+</details>
 
 ## Current Point
 
 - **HEAD:** `[full commit]` on `[branch]`
-- **Recap checkpoint:** `[last_commit; full HEAD only after every selected commit is represented]`
-- **Pending committed history:** None [only when checkpoint equals HEAD; otherwise report the bounded collection still pending without advancing state]
+- **Recap checkpoint:** `[last_commit; latest commit fully represented by the published entries]`
+- **Pending committed history:** `None` when caught up; otherwise, `[N] commits remain; oldest unrepresented: [full hash]`.
 - **Committed work:** [what is complete through the checkpoint; link to entries above]
 - **Uncommitted work:** [staged, unstaged, and untracked work separately, including the skill-owned recap output]
 - **Verification:** [only checks actually observed; label skipped/unknown checks]
@@ -34,7 +40,7 @@ Use this template for `docs/recap.md`; replace bracketed placeholders with verif
 
 <!-- recap-state
 branch: <current branch>
-last_commit: <full commit represented by every dated entry through the complete range>
+last_commit: <latest commit whose changes are fully represented by the published entries>
 last_updated: YYYY-MM-DD
 output_sha256: <64 lowercase hexadecimal characters>
 -->
