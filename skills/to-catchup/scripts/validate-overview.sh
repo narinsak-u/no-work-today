@@ -61,12 +61,17 @@ fi
 # A fingerprint is optional for clean legacy overviews. When present, it must
 # occur once in the exact terminal skill-state block shown in the skill guide.
 fingerprints="$(LC_ALL=C awk '
+  {
+    previous_two = previous_one
+    previous_one = last
+    last = $0
+  }
   /^[[:space:]]*output_sha256([[:space:]]|:|$)/ { count++; field_line = NR; field = $0 }
   /^<!-- skill-state$/ { openings++ }
   END {
     if (count == 0) exit 0
     if (count != 1 || openings != 1 || field_line != NR - 1 ||
-        $(NR - 2) != "<!-- skill-state" || $0 != "-->") exit 1
+        previous_two != "<!-- skill-state" || previous_one != field || last != "-->") exit 1
     if (field !~ /^output_sha256: [0-9a-f]+$/ || length(field) != 79) exit 1
     print substr(field, 16)
   }

@@ -107,11 +107,25 @@ reject_file() {
   }
   cmp "$fixture/submitted-before.md" "$candidate"
 }
-reject_appended() {
-  local label="$1" value="$2"
+expect_validation() {
+  local expectation="$1" label="$2" value="$3" diagnostic
   cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
   printf '%s\n' "$value" >> "$fixture/candidate.md"
-  reject_file "$label" "$fixture/candidate.md" "$value"
+  if [[ "$expectation" == accept ]]; then
+    bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md" ||
+      { printf 'Validator rejected %s\n' "$label" >&2; exit 1; }
+  else
+    cp "$fixture/candidate.md" "$fixture/submitted-before.md"
+    if diagnostic="$(bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md" 2>&1)"; then
+      printf 'Validator accepted %s\n' "$label" >&2
+      exit 1
+    fi
+    [[ "$diagnostic" != *"$value"* ]] || {
+      printf 'Validator disclosed the unsafe value while rejecting %s\n' "$label" >&2
+      exit 1
+    }
+    cmp "$fixture/submitted-before.md" "$fixture/candidate.md"
+  fi
 }
 for unsafe in \
   'API_KEY=sk-test-secret' \
@@ -124,12 +138,10 @@ for unsafe in \
   'TOKEN=abcde' \
   'DATABASE_PASSWORD=[REDACTED], actual-secret' \
   'TOKEN=[REDACTED].secret'; do
-  reject_appended 'unsafe credential example' "$unsafe"
+  expect_validation reject 'unsafe credential example' "$unsafe"
 done
 for safe in 'API_KEY=[REDACTED]' 'SERVICE_TOKEN=<YOUR TOKEN>' 'TOKEN=[REDACTED].'; do
-  cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
-  printf '%s\n' "$safe" >> "$fixture/candidate.md"
-  bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md"
+  expect_validation accept 'safe placeholder' "$safe"
 done
 
 cp "$fixture/my project/docs/overview.md" "$fixture/fingerprinted.md"
