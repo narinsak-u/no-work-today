@@ -73,22 +73,6 @@ done
 [[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 5 ]] || exit 1
 grep -Fq 'Observed:' "$fixture/my project/docs/overview.md"
 grep -Fq 'Candidate:' "$fixture/my project/docs/overview.md"
-cp "$fixture/my project/docs/overview.md" "$fixture/clean-overview.md"
-printf 'API_KEY=sk-test-secret\n' >> "$fixture/my project/docs/overview.md"
-if bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" >/dev/null 2>&1; then
-  printf 'Validator accepted exposed secret\n' >&2
-  exit 1
-fi
-cp "$fixture/clean-overview.md" "$fixture/my project/docs/overview.md"
-printf 'password=secretvalue\n' >> "$fixture/my project/docs/overview.md"
-if bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" >/dev/null 2>&1; then
-  printf 'Validator accepted lowercase password\\n' >&2; exit 1
-fi
-cp "$fixture/clean-overview.md" "$fixture/my project/docs/overview.md"
-printf 'GITHUB_TOKEN=ghp_exampletoken123456\\n' >> "$fixture/my project/docs/overview.md"
-if bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md" >/dev/null 2>&1; then
-  printf 'Validator accepted token value\\n' >&2; exit 1
-fi
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
 ## Purpose
@@ -110,24 +94,56 @@ DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
 grep -Fq 'changes the database; confirm the target database before running' "$fixture/my project/docs/overview.md"
 grep -Fq 'review its destination first' "$fixture/my project/docs/overview.md"
+reject_file() {
+  local label="$1" candidate="$2" sensitive="$3" diagnostic
+  cp "$candidate" "$fixture/submitted-before.md"
+  if diagnostic="$(bash "$skill/scripts/validate-overview.sh" "$candidate" 2>&1)"; then
+    printf 'Validator accepted %s\n' "$label" >&2
+    exit 1
+  fi
+  [[ -z "$sensitive" || "$diagnostic" != *"$sensitive"* ]] || {
+    printf 'Validator disclosed the unsafe value while rejecting %s\n' "$label" >&2
+    exit 1
+  }
+  cmp "$fixture/submitted-before.md" "$candidate"
+}
+expect_validation() {
+  local expectation="$1" label="$2" value="$3" diagnostic
+  cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
+  printf '%s\n' "$value" >> "$fixture/candidate.md"
+  if [[ "$expectation" == accept ]]; then
+    bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md" ||
+      { printf 'Validator rejected %s\n' "$label" >&2; exit 1; }
+  else
+    cp "$fixture/candidate.md" "$fixture/submitted-before.md"
+    if diagnostic="$(bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md" 2>&1)"; then
+      printf 'Validator accepted %s\n' "$label" >&2
+      exit 1
+    fi
+    [[ "$diagnostic" != *"$value"* ]] || {
+      printf 'Validator disclosed the unsafe value while rejecting %s\n' "$label" >&2
+      exit 1
+    }
+    cmp "$fixture/submitted-before.md" "$fixture/candidate.md"
+  fi
+}
 for unsafe in \
+  'API_KEY=sk-test-secret' \
+  'password=secretvalue' \
+  'GITHUB_TOKEN=ghp_exampletoken123456' \
+  'postgres://reader:catchupPostgresSecret29@db.example.test/app' \
   'postgresql://reader:catchupUserInfoSecret29@db.example.test/app' \
   'SERVICE_DATABASE_PASSWORD=catchupAssignmentSecret29' \
   'SERVICE_API_KEY=x' \
   'TOKEN=abcde' \
-  'DATABASE_URL=[REDACTED], actual-secret'; do
-  cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
-  printf '%s\n' "$unsafe" >> "$fixture/candidate.md"
-  if bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md" >/dev/null 2>&1; then
-    printf 'Validator accepted unsafe credential example: %s\n' "$unsafe" >&2
-    exit 1
-  fi
+  'DATABASE_PASSWORD=[REDACTED], actual-secret' \
+  'TOKEN=[REDACTED].secret'; do
+  expect_validation reject 'unsafe credential example' "$unsafe"
 done
-for safe in 'API_KEY=[REDACTED]' 'SERVICE_TOKEN=<YOUR TOKEN>'; do
-  cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
-  printf '%s\n' "$safe" >> "$fixture/candidate.md"
-  bash "$skill/scripts/validate-overview.sh" "$fixture/candidate.md"
+for safe in 'API_KEY=[REDACTED]' 'SERVICE_TOKEN=<YOUR TOKEN>' 'TOKEN=[REDACTED].'; do
+  expect_validation accept 'safe placeholder' "$safe"
 done
+
 cp "$fixture/my project/docs/overview.md" "$fixture/fingerprinted.md"
 cat >> "$fixture/fingerprinted.md" <<'DOC'
 <!-- skill-state
@@ -139,10 +155,22 @@ awk -v digest="$digest" '{sub(/output_sha256: FINGERPRINT/, "output_sha256: " di
 bash "$skill/scripts/validate-overview.sh" "$fixture/signed-overview.md"
 cp "$fixture/signed-overview.md" "$fixture/stale-overview.md"
 printf 'User edit\n' >> "$fixture/stale-overview.md"
-cp "$fixture/stale-overview.md" "$fixture/stale-before.md"
-if bash "$skill/scripts/validate-overview.sh" "$fixture/stale-overview.md" >/dev/null 2>&1; then
-  printf 'Validator accepted a stale overview fingerprint\n' >&2
-  exit 1
-fi
-cmp "$fixture/stale-before.md" "$fixture/stale-overview.md"
+reject_file 'stale overview fingerprint' "$fixture/stale-overview.md" ''
+
+cp "$fixture/my project/docs/overview.md" "$fixture/misplaced-fingerprint.md"
+printf 'output_sha256: %064d\n' 0 >> "$fixture/misplaced-fingerprint.md"
+reject_file 'misplaced fingerprint' "$fixture/misplaced-fingerprint.md" ''
+cp "$fixture/my project/docs/overview.md" "$fixture/duplicate-fingerprint.md"
+cat >> "$fixture/duplicate-fingerprint.md" <<'DOC'
+<!-- skill-state
+output_sha256: 0000000000000000000000000000000000000000000000000000000000000000
+output_sha256: 1111111111111111111111111111111111111111111111111111111111111111
+-->
+DOC
+reject_file 'duplicate fingerprints' "$fixture/duplicate-fingerprint.md" ''
+
+digest="$( (cat "$fixture/my project/docs/overview.md"; printf '<!-- skill-state\n-->') | (sha256sum 2>/dev/null || shasum -a 256) | awk '{print $1}')"
+cat "$fixture/my project/docs/overview.md" > "$fixture/no-final-lf.md"
+printf '<!-- skill-state\noutput_sha256: %s\n-->' "$digest" >> "$fixture/no-final-lf.md"
+bash "$skill/scripts/validate-overview.sh" "$fixture/no-final-lf.md"
 printf 'Catch-up shell scenarios passed.\n'
