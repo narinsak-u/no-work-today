@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Repository Catchup
 
-Create or update one evidence-based onboarding document at `docs/overview.md`. The document should help a new developer understand the repository's purpose, architecture, application flow, important modules and files, configuration, development workflow, and safe next steps without reading the entire codebase first.
+Create or update one concise, evidence-based onboarding document at `docs/overview.md`. A new reader should quickly understand the project's purpose, where its important parts live, the main runtime data path, and useful project commands. Aim for about one page where complexity permits.
 
 ## Boundaries
 
@@ -19,32 +19,22 @@ Create or update one evidence-based onboarding document at `docs/overview.md`. T
 
 ## Workflow
 
-1. Establish the repository root. Run this skill's `scripts/scan-project.sh`, `scripts/detect-stack.sh`, and `scripts/find-entrypoints.sh` with the target repository root as their argument (invoke via an absolute path resolved from this skill directory, not a path inside the target project). The scripts report bounded inventory, manifest-based stack evidence, and **entrypoint candidates**, not architectural conclusions. Look for `docs/recap.md` and `docs/backlog.md` without assuming they exist. If a helper fails, inspect the relevant files directly; never turn missing script output into an inferred fact.
-2. Inspect the repository areas that establish behavior and day-to-day work:
-   - application entry points, startup/bootstrap code, and executable commands;
-   - authentication and authorization boundaries, session or identity handling, and security-sensitive middleware;
-   - core modules, shared utilities, routes or handlers, jobs or workers, persistence, schemas, and integration boundaries;
-   - API clients, adapters, external-service wrappers, and other integration boundaries;
-   - tests, fixtures, examples, and test commands;
-   - environment examples, configuration loaders, CI, deployment, migration, and release scripts;
-   - generated artifacts or files that developers must not edit directly.
-3. Explain the system architecture and important runtime flows before writing a file inventory. Trace inputs through meaningful components to outputs or side effects; include failure or background paths only when supported by evidence.
-4. Read `references/overview-template.md` from this skill and use its headings and guidance for `docs/overview.md`. Do not replace the template with an unrelated format.
-5. Fill every template section with concise, repository-backed guidance. Distinguish observed facts from inferences, cite relevant paths and commands, and mark unknowns instead of filling gaps from convention or intuition.
-6. In `Environment and Configuration`, document variable names, loading locations, safe defaults, and setup requirements without exposing secret values. If a file contains secrets, describe its role without reproducing its contents.
-7. In `Development Workflow`, include only commands supported by repository evidence. State when testing, deployment, or another workflow could not be verified.
+1. Establish the repository root. Run this skill's `scripts/scan-project.sh`, `scripts/detect-stack.sh`, and `scripts/find-entrypoints.sh` with the target repository root as their argument (invoke via an absolute path resolved from this skill directory, not a path inside the target project). The scripts report bounded inventory, manifest-based stack evidence, and **entrypoint candidates**, not architectural conclusions. Look for `docs/recap.md` and `docs/backlog.md` without assuming they exist. If a helper fails, inspect relevant files directly; never infer facts from missing output.
+2. Inspect only repository evidence needed to explain the primary runtime path, security boundaries, configuration and useful project commands. Follow entrypoints into actual callers and outputs; candidates are leads, not proof of runtime behavior. Check tests, manifests, scripts and deployment/configuration files where they substantiate a claim.
+3. Read `references/overview-template.md` and use its headings and guidance for `docs/overview.md`. Consolidate overlapping architecture, application/data flow, module and file inventories; do not add repetitive sections.
+4. Fill every template section concisely. Cite paths or exact commands where useful; distinguish observed behavior from unverified candidates and mark unknowns as `Unknown` or `Needs verification`.
+5. In `Scripts`, include useful commands and runnable scripts belonging to the target project, with a brief purpose. State whether commands were exercised; warn plainly before commands that alter data. Do not list this skill's internal helpers unless useful to the target project.
+6. Keep security cautions, evidence gaps and operational invariants in `Important Notes`. In `Project Tree`, show important folders and a few key files only, not an exhaustive inventory. In `Workflow`, use one simple plain-text diagram for the primary runtime data path, with minimal necessary branches.
+7. In configuration descriptions, record variable names, safe defaults and setup requirements without exposing secret values. If a file contains secrets, describe its role without reproducing contents.
 8. Before writing, validate ownership of the existing output. Keep one hidden HTML comment at the end of `docs/overview.md` in this exact form, with LF line endings:
    ```md
    <!-- skill-state
    output_sha256: <64 lowercase hexadecimal characters>
    -->
    ```
-   The `output_sha256` line is SHA-256 of the exact UTF-8 bytes of the entire document with only that metadata line and its line ending omitted. Retain the comment delimiters, every other metadata field, and every other byte and line ending unchanged; do not normalize content. On first write, write the completed overview followed by this comment and calculate the fingerprint by this rule.
-   - If an existing output contains the `output_sha256` field, recompute the hash using that rule. If it is well-formed and matches, it is safe for this skill to update even when Git reports staged or unstaged changes to `docs/overview.md`. After every permitted update, recalculate and replace the fingerprint. If the field is malformed, duplicated, or mismatched, stop without writing and ask how to preserve or merge the edits.
-   - If an existing output has no `output_sha256` field, adopt it only when it is a clean, tracked legacy file in a Git repository: verify it is tracked and `git status --short -- docs/overview.md` reports no staged or unstaged changes. Add the fingerprint with the next complete update. If it is untracked, modified, or in a non-Git repository, stop without writing and ask for direction; do not treat non-Git content as clean.
-9. Write the result to `docs/overview.md` only after the ownership check permits the update. Preserve the existing overview structure and all unrelated files; do not modify, rename, or delete unrelated documentation, source files, configuration, or generated artifacts.
-10. Re-read the result, run this skill's `scripts/validate-overview.sh` on `docs/overview.md`, and correct any structural or obvious secret warning before finishing. The validator is read-only and cannot establish architectural correctness: separately check that the document explains flows before inventories, contains no unsupported claims, has a valid fingerprint, and leaves unrelated files untouched. Confirm the ownership guard passed before writing.
+   `output_sha256` is SHA-256 of the exact UTF-8 bytes of the entire document with only that metadata line and its line ending omitted. Retain the comment delimiters, every other metadata field, and every other byte and line ending unchanged; do not normalize content. On first write, write the completed overview followed by this comment and calculate the fingerprint by this rule.
+   - If an existing output contains the `output_sha256` field, recompute the hash using that rule. If well-formed and matching, it is safe to update even when Git reports staged or unstaged changes to `docs/overview.md`. After every permitted update, recalculate and replace the fingerprint. If malformed, duplicated, or mismatched, stop without writing and ask how to preserve or merge edits.
+   - If an existing output has no `output_sha256` field, adopt it only when it is a clean, tracked legacy file in a Git repository: verify it is tracked and `git status --short -- docs/overview.md` reports no staged or unstaged changes. Add the fingerprint with the next complete update. If untracked, modified, or in a non-Git repository, stop without writing and ask for direction; do not treat non-Git content as clean.
+9. Write only after the ownership check permits it. Preserve unrelated files. Re-read the result and run this skill's `scripts/validate-overview.sh`; correct structural or obvious secret warnings before finishing. The validator cannot establish architectural correctness: separately check evidence, observed flows, fingerprint and unrelated-file preservation.
 
-## Completion Criteria
-
-A catchup is complete when `docs/overview.md` exists, follows the local template, explains how the system works before enumerating files, covers architecture, flow, modules, configuration, development workflow, reading order, and cautions, explicitly identifies evidence gaps, and has a valid hidden fingerprint. The only intended repository output is `docs/overview.md` (plus the `docs/` directory when it had to be created).
+A catchup is complete when `docs/overview.md` exists, follows the concise template, gives an evidence-based purpose, selective project tree, observed primary runtime path, useful project commands and limited important notes, preserves safety cautions and evidence gaps, and has a valid hidden fingerprint. The only intended repository output is `docs/overview.md` (plus `docs/` if it had to be created).
