@@ -37,19 +37,75 @@ awk '
   /^- \*\*Next safe point:\*\* / {safe_points++}
   END {if (invalid || title!=1 || scope!=1 || current!=1 || entries<1 || categories!=entries || statuses!=entries || whys!=entries || files!=entries || commits!=entries || impacts!=entries || notes!=entries || verifications!=entries || heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 || uncommitted!=1 || safe_points!=1) exit 1}
 ' "$recap" || fail 'required sections or work-entry fields missing'
-if LC_ALL=C grep -Eiq '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(^|[^A-Za-z0-9_])(AWS_SECRET_ACCESS_KEY|GITHUB_TOKEN|API_KEY|PASSWORD)[[:space:]]*[:=][[:space:]]*[^[:space:]]+|\b(sk_live_|ghp_|github_pat_)[A-Za-z0-9_]+)' "$recap"; then
+if LC_ALL=C awk '
+  function placeholder(value, quote, tail) {
+    if (value ~ /^[`"\047]/) {
+      quote=substr(value, 1, 1)
+      value=substr(value, 2)
+    }
+    if (!match(value, /^\[(redacted|masked|placeholder|your_[[:alnum:]_]+|user|username|password|api_key|access_token|secret_key|token)\]/)) return 0
+    tail=substr(value, RLENGTH+1)
+    if (quote != "") {
+      if (substr(tail, 1, 1) != quote) return 0
+      tail=substr(tail, 2)
+    }
+    return tail == "" || tail ~ /^[[:space:]]/ ||
+      tail ~ /^[,;][[:space:]]*(([[:alnum:]_]+_)?(aws_secret_access_key|password|api_key|access_token|secret_key|token))[[:space:]]*[:=]/
+  }
+  {
+    line=tolower($0)
+    if (line ~ /-----begin (rsa |ec |openssh )?private key-----/ ||
+        line ~ /(^|[^[:alnum:]_])(sk_live_|ghp_|github_pat_)[[:alnum:]_]+/) bad=1
+
+    # Look at the value, not just the key: names and redaction placeholders
+    # are safe, while a namespace prefix cannot hide a credential assignment.
+    rest=line
+    while (match(rest, /(^|[^[:alnum:]_])([[:alnum:]_]+_)?(aws_secret_access_key|password|api_key|access_token|secret_key|token)[[:space:]]*[:=][[:space:]]*/)) {
+      value=substr(rest, RSTART+RLENGTH)
+      rest=value
+      if (value !~ /^$/ && !placeholder(value)) bad=1
+    }
+
+    # Match authority user-info, not ordinary URLs or unrelated prose.
+    rest=line
+    while (match(rest, /(postgres(ql)?|mysql|mongodb(\+srv)?|rediss?|amqps?|https?):\/\/[^[:space:]\/?#]+/)) {
+      authority=substr(rest, RSTART, RLENGTH)
+      remaining=substr(rest, RSTART+RLENGTH)
+      sub(/^[^:]+:\/\//, "", authority)
+      userinfo=authority
+      scan=authority
+      offset=at=0
+      while (match(scan, /@|%40/)) {
+        at=offset+RSTART
+        offset+=RSTART+RLENGTH-1
+        scan=substr(scan, RSTART+RLENGTH)
+      }
+      userinfo=(at ? substr(authority, 1, at-1) : "")
+      if (match(userinfo, /(:|%3a)/)) {
+        userinfo=substr(userinfo, RSTART+RLENGTH)
+        if (userinfo != "" && !placeholder(userinfo)) bad=1
+      }
+      rest=remaining
+    }
+  }
+  END {exit !bad}
+' "$recap"; then
   fail 'possible secret value'
 fi
 if [[ -n $selected ]]; then
   [[ -f $selected ]] || fail 'commit list missing'
-  # Check the entire selected set against the commit fields (never just one page).
+  # Account for every selected commit only in dated work-entry commit fields,
+  # not in Current Point or other prose (including lookalike commit fields).
   awk '
     FILENAME==ARGV[1] {
       if ($0 !~ /^[0-9a-f]+$/ || (length($0)!=40 && length($0)!=64) || want[$0]++) bad=1
       ids[++n]=$0
       next
     }
-    /^- \*\*Commits:\*\* / {
+    /^## / {
+      in_entry=($0 ~ /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] /)
+    }
+    in_entry && /^- \*\*Commits:\*\* / {
       parts=split($0, tokens, "`")
       for (i=2; i<parts; i+=2) {
         hash=tokens[i]

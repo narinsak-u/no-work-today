@@ -10,15 +10,15 @@ LC_ALL=C awk '
   function error(message) { print "Backlog: " message " (line " NR ")" > "/dev/stderr"; bad = 1 }
   function finish_item(   field) {
     if (!item) return
-    for (field in required) if (!seen_field[field]) error("item " item " missing " field)
-    if (tasks == 0) error("item " item " has no checklist task")
-    if (status != section) error("item " item " status does not match section " section)
+    for (field in required) if (!seen_field[field]) error("item missing " field)
+    if (tasks == 0) error("item has no checklist task")
+    if (status != section) error("item status does not match section")
     if (section == "Done") {
-      if (completion != "Completed") error("Done item " item " lacks completed state")
+      if (completion != "Completed") error("Done item lacks completed state")
       if (values["Completed on"] == "—" || values["Completion commit"] == "—" ||
           values["Completion evidence"] == "—" || values["Completion notes"] == "—")
-        error("Done item " item " lacks completion record")
-    } else if (completion != "Not completed") error("unfinished item " item " has completed state")
+        error("Done item lacks completion record")
+    } else if (completion != "Not completed") error("unfinished item has completed state")
     for (field in seen_field) delete seen_field[field]
     for (field in values) delete values[field]
     item = ""
@@ -46,8 +46,8 @@ LC_ALL=C awk '
       finish_item()
       section = substr($0, 4)
       if (section != "In Progress" && section != "Todo" && section != "Blocked" && section != "Needs Review" && section != "Done")
-        error("unknown section " section)
-      if (++sections[section] > 1) error("duplicate section " section)
+        error("unknown section")
+      if (++sections[section] > 1) error("duplicate section")
       next
     }
     if ($0 ~ /^### /) {
@@ -57,7 +57,7 @@ LC_ALL=C awk '
       item = title_parts[2]
       if (item !~ /^BL-[0-9][0-9][0-9][0-9]*$/ || $0 !~ /^### BL-[0-9][0-9][0-9][0-9]* — .+/)
         error("invalid item heading")
-      if (++ids[item] > 1) error("duplicate ID " item)
+      if (++ids[item] > 1) error("duplicate ID")
       next
     }
     if ($0 == "- **Tasks:**" && item) {
@@ -71,14 +71,14 @@ LC_ALL=C awk '
       sub(/:\*\*.*/, "", label)
       value = $0
       sub(/^ *- \*\*[^*]+:\*\* /, "", value)
-      if (!required[label]) { error("unknown field " label); next }
-      if (++seen_field[label] > 1 || value == "") error("duplicate or empty field " label)
+      if (!required[label]) { error("unknown field"); next }
+      if (++seen_field[label] > 1 || value == "") error("duplicate or empty field")
       values[label] = value
       if (label == "Status") {
         status = value
-        if (value != "Todo" && value != "In Progress" && value != "Blocked" && value != "Needs Review" && value != "Done") error("invalid status " value)
+        if (value != "Todo" && value != "In Progress" && value != "Blocked" && value != "Needs Review" && value != "Done") error("invalid status")
       }
-      if (label == "Priority" && value != "High" && value != "Medium" && value != "Low") error("invalid priority " value)
+      if (label == "Priority" && value != "High" && value != "Medium" && value != "Low") error("invalid priority")
       if (label == "Completion") completion = value
     }
   }
@@ -110,7 +110,63 @@ else
   exit 1
 fi
 [[ "$actual" == "$expected" ]] || { printf 'Backlog fingerprint mismatch: %s\n' "$file" >&2; exit 1; }
-if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(^|[^[:alnum:]_])(API_KEY|SECRET_KEY|ACCESS_TOKEN|GITHUB_TOKEN|AWS_SECRET_ACCESS_KEY|PASSWORD|TOKEN)[[:space:]]*[:=][[:space:]]*[^[:space:]<]{6,}|(sk_live_|ghp_|github_pat_)[A-Za-z0-9_-]{8,}' "$file"; then
+if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|github_pat_)[A-Za-z0-9_-]{8,}' "$file"; then
+  printf 'Backlog contains a possible secret; remove its value before sharing\n' >&2
+  exit 1
+fi
+if ! LC_ALL=C awk '
+  function placeholder(value, quote) {
+    if (value ~ /^["\047]/) {
+      quote = substr(value, 1, 1)
+      if (substr(value, length(value), 1) != quote) return 0
+      value = substr(value, 2, length(value) - 2)
+    }
+    return value ~ /^(\[redacted( (value|password|api key|secret key|access token|token))?\]|\[hidden\]|\[masked\]|<redacted>)$/
+  }
+  function sensitive(source,    lower, rest, value, url, authority, info, at, offset, colon, end) {
+    lower = tolower(source)
+    rest = lower
+    while (match(rest, /(^|[^[:alnum:]_])(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)|aws_secret_access_key)[[:space:]]*[:=][[:space:]]*/)) {
+      rest = substr(rest, RSTART + RLENGTH)
+      if (match(rest, /^(\[[^]]+\]|"[[^]]+\]"|\047[[^]]+\047)/) || match(rest, /^[^[:space:],;#]+/)) {
+        value = substr(rest, 1, RLENGTH)
+        length_value = RLENGTH
+        if (!placeholder(value)) return 1
+        suffix = substr(rest, length_value + 1)
+        if (suffix ~ /^[,;]/ &&
+            suffix !~ /^[,;][[:space:]]*(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)|aws_secret_access_key)[[:space:]]*[:=]/) return 1
+        if (suffix !~ /^([[:space:],;#]|$)/) return 1
+        rest = suffix
+      }
+    }
+    rest = lower
+    while (match(rest, /(^|[^[:alnum:]_])(postgres(ql)?|mysql|mongodb(\+srv)?|rediss?|amqps?|https?):\/\/[^[:space:]\/?#<>"\047)]+/)) {
+      url = substr(rest, RSTART, RLENGTH)
+      end = RSTART + RLENGTH
+      authority = url
+      sub(/^.*:\/\//, "", authority)
+      info = authority
+      at = 0
+      offset = 0
+      while (match(info, /@|%40/)) {
+        at = offset + RSTART
+        offset += RSTART + RLENGTH - 1
+        info = substr(info, RSTART + RLENGTH)
+      }
+      if (at) {
+        info = substr(authority, 1, at - 1)
+        colon = match(info, /:|%3a/)
+        if (colon) {
+          value = substr(info, colon + RLENGTH)
+          if (value != "" && !placeholder(value)) return 1
+        }
+      }
+      rest = substr(rest, end)
+    }
+    return 0
+  }
+  sensitive($0) { exit 1 }
+' "$file"; then
   printf 'Backlog contains a possible secret; remove its value before sharing\n' >&2
   exit 1
 fi
