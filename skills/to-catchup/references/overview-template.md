@@ -2,48 +2,40 @@
 
 ## Purpose
 
-Describe what the repository does, who uses it, and the primary problem it solves. Base this on repository evidence; mark any unresolved purpose as unknown.
+In a few plain-language sentences, explain what the repository does and who it serves. Cite evidence; label unresolved purpose `Unknown` or `Needs verification`.
 
-## Stack
+## Project Tree
 
-List the languages, runtimes, frameworks, build tools, and major storage or messaging technologies. Include versions only when the repository states them.
+Show only important folders and a few key files, with a short note on why they matter. Keep this selective, not an exhaustive inventory.
 
-## Architecture
+```text
+src/                 main implementation
+src/main.ts          startup (candidate until runtime use is confirmed)
+tests/               automated checks
+package.json         commands and dependencies
+```
 
-Explain the major components and their responsibilities, how they are separated, and how they communicate. Describe the shape of the system before listing individual files.
+Use paths supported by repository evidence. Do not treat a detected entrypoint candidate as proven runtime behavior.
 
-## Application Flow
+## Workflow
 
-Trace the important runtime flows from an entry point through the relevant components to their outputs or side effects. Cover the normal path and important failure or background paths when evidence exists.
+Use one simple plain-text diagram for the primary runtime data path. Identify what was observed in code and distinguish candidates or unresolved links explicitly. Include only necessary branches and side effects.
 
-## Important Modules
+```text
+Observed: input → validated handler → persisted result → response
+Needs verification: detected candidate → runtime startup
+```
 
-Describe the modules a new developer is most likely to need, including authentication or authorization, shared utilities, and API clients where present. Explain what each owns and the boundaries between them.
+Name the source path(s) that support important workflow claims. Do not repeat the diagram as separate architecture, application-flow, module, data-flow, or file-inventory sections.
 
-## Important Files
+## Scripts
 
-Inventory the high-value entry points, configuration files, schemas, scripts, tests, and deployment files. Explain why each file matters rather than listing every file.
+List useful commands and runnable scripts that belong to the target project. Give each a concise purpose, cite the manifest/script/readme evidence, and say whether it was exercised. Warn before commands that alter data (for example migrations, resets, seeders, deployment, or destructive cleanup). Do not list this skill's internal helpers unless they are genuinely useful to project users.
 
-## Data Flow
+## Important Notes
 
-Describe how important data enters the system, is validated or transformed, is persisted or transmitted, and reaches users or downstream systems.
+Keep this section limited to essential security cautions, operational invariants, configuration/setup requirements, generated-file warnings, ownership or deployment unknowns, and evidence gaps. Record configuration names and safe placeholders only; never copy secrets. Use paths and exact commands where they help a reader verify or act safely.
 
-## External Dependencies
-
-List external services, APIs, databases, queues, third-party providers, and system tools. Explain where each is used and identify any required local setup.
-
-## Environment and Configuration
-
-Document configuration names, defaults, loading locations, and environment-specific behavior. Record variable names and safe examples only; never copy secret values, tokens, credentials, private keys, or sensitive connection strings.
-
-## Development Workflow
-
-Document installation, local startup, common development commands, testing, linting or formatting, migrations or generated artifacts, and deployment or release steps when the repository provides them. Mark commands that could not be verified.
-
-## Recommended Reading Order
-
-Give a short, evidence-based sequence of files or directories that helps a new developer understand the system from entry points and flows to implementation details.
-
-## Cautions
-
-Record sharp edges, invariants, operational risks, security-sensitive areas, incomplete documentation, and unknowns. Do not turn guesses into guidance; state what must be verified.
+<!-- skill-state
+output_sha256: <64 lowercase hexadecimal characters>
+-->
