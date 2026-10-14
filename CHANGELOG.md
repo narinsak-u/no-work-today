@@ -15,6 +15,7 @@ All notable changes to this repository are documented here. Releases follow sema
 - Bound each recap invocation to 100 commits, preserve an oldest-first continuation checkpoint, and put new plain-language summaries ahead of collapsed technical evidence.
 - Restored catchup protection for credential-bearing URL user-info and prefixed credential assignments, including short secret values, while allowing recognized redaction placeholders.
 - Updated the catchup shell seam coverage and added a readable recap example with explicit checkpoint and pending-history state.
+- Expanded catchup overviews with evidence-backed Tech Stack sections, named workflow inventories with vertical diagrams, and correctly counted HTTP endpoint tables when applicable.
 - Catchup validation now checks a single terminal `output_sha256` fingerprint against the exact document bytes, including files without a final newline, while allowing clean legacy files without fingerprints.
 
 - Fixed credential guards for quoted redaction markers, comma/semicolon-adjacent values, and percent-encoded URL hosts; restored safe recap rejection diagnostics and bounded credential validation loops.

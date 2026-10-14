@@ -49,6 +49,7 @@ cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
 ## 1. Purpose
 A service that manages accounts.
+<<<<<<< HEAD
 ## 2. Tech Stack
 Unknown.
 ## 3. Architecture
@@ -56,6 +57,12 @@ Application handles requests.
 ## 4. Main Flows
 ### 🔁 Request
 Observed: the request reaches a handler and returns a response.
+=======
+## Tech Stack
+
+JavaScript and Next.js are declared in the fixture manifest.
+## Project Tree
+>>>>>>> d910d8d (feat: improve catchup overview inventories)
 ```text
 Request
   |
@@ -73,6 +80,7 @@ src/main.rs
   v
 Needs verification
 ```
+<<<<<<< HEAD
 ## 5. Core Modules
 `src/` contains application code.
 ## 6. Important Files
@@ -84,27 +92,59 @@ Unknown.
 ## 9. Start Here
 Read `src/main.rs`, then tests.
 ## 10. Important Notes
+=======
+
+## API Endpoints
+
+Confirmed count: 1 (fixture example).
+
+| Method | Path | Purpose | Access |
+|---|---|---|---|
+| GET | /health | Liveness | Public |
+## Scripts
+- `cargo test` — run tests (declared in Cargo.toml).
+## Important Notes
+>>>>>>> d910d8d (feat: improve catchup overview inventories)
 - Authentication boundary: verify before changing protected handlers.
 - Unknown: deployment behavior; inspect deployment configuration.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
+<<<<<<< HEAD
 for heading in '## 1. Purpose' '## 5. Core Modules' '## 6. Important Files' '## 8. Development Workflow' '## 10. Important Notes'; do
   grep -Fxq "$heading" "$fixture/my project/docs/overview.md" || exit 1
 done
 [[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 10 ]] || exit 1
 [[ "$(grep -c '^### ' "$fixture/my project/docs/overview.md")" -eq 2 ]] || exit 1
 [[ "$(grep -c '^  |$' "$fixture/my project/docs/overview.md")" -ge 2 ]] || exit 1
+=======
+for heading in '## Tech Stack' '## Project Tree' '## Workflow' '## API Endpoints' '## Scripts' '## Important Notes'; do
+  grep -Fxq "$heading" "$fixture/my project/docs/overview.md" || exit 1
+done
+[[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 7 ]] || exit 1
+>>>>>>> d910d8d (feat: improve catchup overview inventories)
 grep -Fq 'Observed:' "$fixture/my project/docs/overview.md"
 grep -Fq 'Candidate:' "$fixture/my project/docs/overview.md"
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
 ## 1. Purpose
 A fictional service.
+<<<<<<< HEAD
 ## 2. Tech Stack
 Unknown.
 ## 3. Architecture
 Application handles requests.
 ## 4. Main Flows
+=======
+## Tech Stack
+
+Node.js with an HTTP framework (fixture evidence).
+## Project Tree
+```text
+src/
+```
+## Workflow
+```text
+>>>>>>> d910d8d (feat: improve catchup overview inventories)
 request → service → response
 ## 5. Core Modules
 `src/` contains application code.
@@ -121,6 +161,28 @@ Read `src/main.rs`.
 - Use `DATABASE_URL=[REDACTED]` in examples; never copy a live connection string.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
+
+mkdir -p "$fixture/client/docs"
+cat > "$fixture/client/docs/overview.md" <<'DOC'
+# Project Overview
+## Purpose
+A browser client.
+## Tech Stack
+TypeScript, React, and Vite.
+## Project Tree
+src/ browser application
+## Workflow
+```text
+Open app
+  ↓
+Search notes
+```
+## Scripts
+- `npm run dev` — start local development.
+## Important Notes
+- The API implementation lives in another repository; server routes are not available here.
+DOC
+bash "$skill/scripts/validate-overview.sh" "$fixture/client/docs/overview.md"
 grep -Fq 'changes the database; confirm the target database before running' "$fixture/my project/docs/overview.md"
 grep -Fq 'review its destination first' "$fixture/my project/docs/overview.md"
 reject_file() {
@@ -182,6 +244,13 @@ expect_validation() {
   fi
 }
 
+<<<<<<< HEAD
+=======
+cp "$fixture/my project/docs/overview.md" "$fixture/missing-tech-stack.md"
+grep -Fv '## Tech Stack' "$fixture/missing-tech-stack.md" > "$fixture/missing-tech-stack.tmp"
+mv "$fixture/missing-tech-stack.tmp" "$fixture/missing-tech-stack.md"
+reject_file 'missing Tech Stack section' "$fixture/missing-tech-stack.md" ''
+>>>>>>> d910d8d (feat: improve catchup overview inventories)
 for unsafe in \
   'API_KEY=sk-test-secret' \
   'password=secretvalue' \

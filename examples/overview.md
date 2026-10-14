@@ -1,9 +1,14 @@
 # Project Overview
 
+<<<<<<< HEAD
 > **Fictional example only.** This describes the invented Lantern Notes project to demonstrate `to-catchup`; it is not evidence about a real repository, deployment, or history.
+=======
+> **Fictional example only.** The Lantern Notes project, workflows, technologies, commands, and routes below are invented to demonstrate `to-catchup`; they are not evidence about a real repository or deployment.
+>>>>>>> d910d8d (feat: improve catchup overview inventories)
 
 ## 1. Purpose
 
+<<<<<<< HEAD
 Lantern Notes is a fictional web service for organizing private reading notes and sharing selected notes with a small team. The imagined API and browser client support creating, searching, and reviewing notes.
 
 ## 2. Tech Stack
@@ -121,3 +126,130 @@ The reading order is illustrative; verify actual paths and priorities in the tar
 - Never copy credentials, tokens, private keys, or sensitive connection strings into `docs/overview.md`.
 - Verify every fictional path, flow, default, command, integration, and invariant against the target repository.
 - Keep unsupported behavior `Unknown` or `Needs verification`; do not infer it from conventions.
+=======
+Lantern Notes is an imagined service for creating private reading notes and sharing selected notes with a small team.
+
+## Tech Stack
+
+- Fictional TypeScript and Node.js application with an invented HTTP framework.
+- Fictional PostgreSQL store and background queue for note-index refreshes.
+- Versions are not specified; none are supported by evidence in this example.
+
+## Project Tree
+
+```text
+src/server.ts                 fictional startup and route registration
+src/routes/notes.ts           fictional HTTP handlers
+src/domain/notes.ts           fictional validation and sharing rules
+src/workers/index-refresh.ts  fictional background index worker
+package.json                  fictional commands and dependencies
+```
+
+## Workflow
+
+**Complete — 5 fictional workflows.** A real overview may claim completeness only when repository evidence supports it.
+
+| Workflow | Purpose |
+|---|---|
+| Create and index a note | Validate and save a note, then queue an index refresh. |
+| Search notes | Filter results by membership before returning matches. |
+| Open a shared note | Check access and return a note shared with the caller. |
+| Change note access | Grant or revoke a team member’s access. |
+| Retry failed index refresh | Retry a transient worker failure so search can catch up. |
+
+### Create and index a note
+
+```text
+Authenticated save request
+  ↓
+Validate content and membership
+  ↓
+Persist note
+  ↓
+Queue index refresh
+  ↓
+Return note identifier
+```
+
+### Change note access
+
+```text
+Owner requests access change
+  ↓
+Verify owner and target member
+  ↓
+Update membership
+  ↓
+Confirm permission change
+```
+
+### Retry failed index refresh
+
+```text
+Index update fails temporarily
+  ↓
+Worker recognizes retryable failure
+  ↓
+Queue another attempt
+  ↓
+Update the search index
+```
+
+<details>
+<summary>Other workflow diagrams (2)</summary>
+
+#### Search notes
+
+```text
+Search request
+  ↓
+Apply membership filter
+  ↓
+Query index
+  ↓
+Return matching notes
+```
+
+#### Open a shared note
+
+```text
+Shared-note request
+  ↓
+Check caller membership
+  ↓
+Load note
+  ↓
+Return note if access is allowed
+```
+
+</details>
+
+## API Endpoints
+
+**Complete — 7 fictional HTTP endpoints.** Access labels and route registrations are invented for this example.
+
+| Method | Path | Purpose | Access |
+|---|---|---|---|
+| GET | `/api/v1/notes` | Search notes | Authenticated |
+| POST | `/api/v1/notes` | Create a note and queue indexing | Authenticated |
+| GET | `/api/v1/notes/:noteId` | Read a note | Authenticated |
+| PATCH | `/api/v1/notes/:noteId` | Update a note | Authenticated |
+| POST | `/api/v1/notes/:noteId/shares` | Grant a member access | Authenticated |
+| DELETE | `/api/v1/notes/:noteId/shares/:memberId` | Revoke a member’s access | Authenticated |
+| GET | `/health` | Liveness check | Public |
+
+## Scripts
+
+These fictional commands were not exercised. Do not copy or run them against a real repository.
+
+- `npm run dev` — start the fictional local service; not exercised.
+- `npm test` — run its fictional tests; not exercised.
+- `npm run build` — build into `dist/`; not exercised.
+- `npm run db:migrate` — applies database changes; **not exercised, and do not run against a real repository**.
+
+## Important Notes
+
+- All stack, route, workflow, path, and command details in this example are fictional; verify each claim against the target repository.
+- Use safe placeholders for configuration names and never copy real credentials or connection strings.
+- The search-index service endpoint and deployment settings are **Needs verification** in this example.
+>>>>>>> d910d8d (feat: improve catchup overview inventories)

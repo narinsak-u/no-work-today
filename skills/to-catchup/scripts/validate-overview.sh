@@ -3,6 +3,7 @@ set -euo pipefail
 
 file="${1:-docs/overview.md}"
 [[ -s "$file" ]] || { printf 'Overview missing or empty: %s\n' "$file" >&2; exit 1; }
+<<<<<<< HEAD
 expected_headings=(
   '# Project Overview'
   '## 1. Purpose'
@@ -29,6 +30,14 @@ if [[ "$headings_match" -ne 1 ]]; then
   printf 'Overview must contain exactly the required major sections in order\n' >&2
   exit 1
 fi
+=======
+for heading in '# Project Overview' '## Purpose' '## Tech Stack' '## Project Tree' '## Workflow' '## Scripts' '## Important Notes'; do
+  if ! grep -Fxq "$heading" "$file"; then
+    printf 'Overview missing section: %s\n' "$heading" >&2
+    exit 1
+  fi
+done
+>>>>>>> d910d8d (feat: improve catchup overview inventories)
 if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|github_pat_)[A-Za-z0-9_-]{8,}' "$file" ||
   LC_ALL=C awk '
     function placeholder(value, quote) {
