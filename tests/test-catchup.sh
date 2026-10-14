@@ -47,48 +47,60 @@ stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/big workspace")"
 
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
-## Purpose
+## 1. Purpose
 A service that manages accounts.
-## Project Tree
-```text
-src/        application code
-tests/      automated checks
-src/main.rs startup candidate (unverified)
-```
-## Workflow
+## 2. Tech Stack
+Unknown.
+## 3. Architecture
+Application handles requests.
+## 4. Main Flows
 ```text
 Observed: request → handler → response
 Candidate: src/main.rs → runtime behavior needs verification
 ```
-## Scripts
-- `cargo test` — run tests (declared in Cargo.toml).
-## Important Notes
+## 5. Core Modules
+`src/` contains application code.
+## 6. Important Files
+`src/main.rs` is a candidate.
+## 7. Data & External Services
+Unknown.
+## 8. Development Workflow
+`cargo test` — run tests (declared in Cargo.toml).
+## 9. Start Here
+Read `src/main.rs`, then tests.
+## 10. Important Notes
 - Authentication boundary: verify before changing protected handlers.
 - Unknown: deployment behavior; inspect deployment configuration.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
-for heading in '## Project Tree' '## Workflow' '## Scripts' '## Important Notes'; do
+for heading in '## 1. Purpose' '## 5. Core Modules' '## 6. Important Files' '## 8. Development Workflow' '## 10. Important Notes'; do
   grep -Fxq "$heading" "$fixture/my project/docs/overview.md" || exit 1
 done
-[[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 5 ]] || exit 1
+[[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 10 ]] || exit 1
 grep -Fq 'Observed:' "$fixture/my project/docs/overview.md"
 grep -Fq 'Candidate:' "$fixture/my project/docs/overview.md"
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
-## Purpose
+## 1. Purpose
 A fictional service.
-## Project Tree
-```text
-src/
-```
-## Workflow
-```text
+## 2. Tech Stack
+Unknown.
+## 3. Architecture
+Application handles requests.
+## 4. Main Flows
 request → service → response
-```
-## Scripts
+## 5. Core Modules
+`src/` contains application code.
+## 6. Important Files
+`src/main.rs`.
+## 7. Data & External Services
+Unknown.
+## 8. Development Workflow
 - `pnpm prisma:migrate` — changes the database; confirm the target database before running.
 - `node scripts/export.js` — writes an export file; review its destination first.
-## Important Notes
+## 9. Start Here
+Read `src/main.rs`.
+## 10. Important Notes
 - Use `DATABASE_URL=[REDACTED]` in examples; never copy a live connection string.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
@@ -107,6 +119,20 @@ reject_file() {
   }
   cmp "$fixture/submitted-before.md" "$candidate"
 }
+cp "$fixture/my project/docs/overview.md" "$fixture/missing-section.md"
+sed -i '/^## 7\. Data & External Services$/d' "$fixture/missing-section.md"
+reject_file 'missing major section' "$fixture/missing-section.md" ''
+cp "$fixture/my project/docs/overview.md" "$fixture/extra-section.md"
+sed -i '/^## 10\. Important Notes$/i ## Appendix' "$fixture/extra-section.md"
+reject_file 'extra major section' "$fixture/extra-section.md" ''
+cp "$fixture/my project/docs/overview.md" "$fixture/reordered-section.md"
+awk '
+  /^## 2\. Tech Stack$/ { print "## 3. Architecture"; print; skip=1; next }
+  /^## 3\. Architecture$/ && skip { next }
+  { print }
+' "$fixture/reordered-section.md" > "$fixture/reordered.tmp"
+mv "$fixture/reordered.tmp" "$fixture/reordered-section.md"
+reject_file 'reordered major section' "$fixture/reordered-section.md" ''
 expect_validation() {
   local expectation="$1" label="$2" value="$3" diagnostic
   cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"
@@ -127,6 +153,7 @@ expect_validation() {
     cmp "$fixture/submitted-before.md" "$fixture/candidate.md"
   fi
 }
+
 for unsafe in \
   'API_KEY=sk-test-secret' \
   'password=secretvalue' \

@@ -3,12 +3,24 @@ set -euo pipefail
 
 file="${1:-docs/overview.md}"
 [[ -s "$file" ]] || { printf 'Overview missing or empty: %s\n' "$file" >&2; exit 1; }
-for heading in '# Project Overview' '## Purpose' '## Project Tree' '## Workflow' '## Scripts' '## Important Notes'; do
-  if ! grep -Fxq "$heading" "$file"; then
-    printf 'Overview missing section: %s\n' "$heading" >&2
-    exit 1
-  fi
-done
+expected_headings=(
+  '# Project Overview'
+  '## 1. Purpose'
+  '## 2. Tech Stack'
+  '## 3. Architecture'
+  '## 4. Main Flows'
+  '## 5. Core Modules'
+  '## 6. Important Files'
+  '## 7. Data & External Services'
+  '## 8. Development Workflow'
+  '## 9. Start Here'
+  '## 10. Important Notes'
+)
+mapfile -t actual_headings < <(grep -E '^#{1,2} ' "$file" || true)
+if [[ "${actual_headings[*]}" != "${expected_headings[*]}" ]]; then
+  printf 'Overview must contain exactly the required major sections in order\n' >&2
+  exit 1
+fi
 if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|github_pat_)[A-Za-z0-9_-]{8,}' "$file" ||
   LC_ALL=C awk '
     function placeholder(value, quote) {

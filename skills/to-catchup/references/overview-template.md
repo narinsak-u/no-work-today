@@ -1,40 +1,55 @@
 # Project Overview
 
-## Purpose
+## 1. Purpose
 
 In a few plain-language sentences, explain what the repository does and who it serves. Cite evidence; label unresolved purpose `Unknown` or `Needs verification`.
 
-## Project Tree
+## 2. Tech Stack
 
-Show only important folders and a few key files, with a short note on why they matter. Keep this selective, not an exhaustive inventory.
+List only technologies that materially explain the system. Cite manifests/configuration; avoid dependency inventories. Mark uncertain roles `Needs verification`.
+
+## 3. Architecture
+
+Describe the main conceptual components and their relationships. Use consistent component names and a small plain-text diagram where useful; do not infer runtime behavior from filenames alone.
 
 ```text
-src/                 main implementation
-src/main.ts          startup (candidate until runtime use is confirmed)
-tests/               automated checks
-package.json         commands and dependencies
+Client → Application → Data store
 ```
 
-Use paths supported by repository evidence. Do not treat a detected entrypoint candidate as proven runtime behavior.
+## 4. Main Flows
 
-## Workflow
-
-Use one simple plain-text diagram for the primary runtime data path. Identify what was observed in code and distinguish candidates or unresolved links explicitly. Include only necessary branches and side effects.
+Trace two to five representative runtime workflows when project complexity warrants them. Follow actual entrypoints through callers and observable outputs; name supporting paths. Keep diagrams simple (normally five to twelve nodes), with minimal necessary branches. Mark candidate or unknown links explicitly; omit unsupported claims.
 
 ```text
-Observed: input → validated handler → persisted result → response
+Observed: request → validated handler → persisted result → response
 Needs verification: detected candidate → runtime startup
 ```
 
-Name the source path(s) that support important workflow claims. Do not repeat the diagram as separate architecture, application-flow, module, data-flow, or file-inventory sections.
+## 5. Core Modules
 
-## Scripts
+Group the important functional modules by responsibility and give their repository locations. Put the selective project map here rather than reproducing a full tree.
 
-List useful commands and runnable scripts that belong to the target project. Give each a concise purpose, cite the manifest/script/readme evidence, and say whether it was exercised. Warn before commands that alter data (for example migrations, resets, seeders, deployment, or destructive cleanup). Do not list this skill's internal helpers unless they are genuinely useful to project users.
+## 6. Important Files
 
-## Important Notes
+Select a few files a developer should open first and explain why each matters. Include paths supported by repository evidence; avoid duplicating the full module map.
 
-Keep this section limited to essential security cautions, operational invariants, configuration/setup requirements, generated-file warnings, ownership or deployment unknowns, and evidence gaps. Record configuration names and safe placeholders only; never copy secrets. Use paths and exact commands where they help a reader verify or act safely.
+## 7. Data & External Services
+
+Summarize important persistent data, configuration, and external integrations that affect behavior. Record names and safe placeholders only; never include secret values or sensitive connection strings. Label unresolved details `Unknown` or `Needs verification`.
+
+## 8. Development Workflow
+
+Give the useful target-project install, run, test, and build commands with a short purpose and source evidence. State whether commands were exercised. Warn plainly before commands that alter data. Do not list this skill's internal helpers unless they are useful to project users.
+
+## 9. Start Here
+
+Give a short, practical reading order for a new developer's first 15–30 minutes, using paths and a brief reason for each step.
+
+## 10. Important Notes
+
+Keep this section limited to repository-specific security cautions, operational invariants, setup requirements, generated-file warnings, ownership or deployment unknowns, and evidence gaps. Use precise paths and commands where useful.
+
+Keep the overview concise and useful, normally readable in a few minutes; roughly 80–150 lines only where warranted. Prefer verified facts over completeness, and do not pad. Use occasional purposeful emoji only in short labels or callouts. Keep headings, diagrams, paths, commands, and code plain.
 
 <!-- skill-state
 output_sha256: <64 lowercase hexadecimal characters>
