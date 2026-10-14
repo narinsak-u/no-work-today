@@ -133,6 +133,17 @@ awk '
 ' "$fixture/reordered-section.md" > "$fixture/reordered.tmp"
 mv "$fixture/reordered.tmp" "$fixture/reordered-section.md"
 reject_file 'reordered major section' "$fixture/reordered-section.md" ''
+cp "$fixture/my project/docs/overview.md" "$fixture/merged-heading.md"
+awk '
+  /^# Project Overview$/ { print; next }
+  /^## 1\. Purpose$/ { print "## 1. Purpose ## 2. Tech Stack"; next }
+  /^A service that manages accounts\.$/ { next }
+  /^## 2\. Tech Stack$/ { next }
+  /^Unknown\.$/ && !unknown_seen++ { next }
+  { print }
+' "$fixture/merged-heading.md" > "$fixture/merged-heading.tmp"
+mv "$fixture/merged-heading.tmp" "$fixture/merged-heading.md"
+reject_file 'merged major heading line' "$fixture/merged-heading.md" ''
 expect_validation() {
   local expectation="$1" label="$2" value="$3" diagnostic
   cp "$fixture/my project/docs/overview.md" "$fixture/candidate.md"

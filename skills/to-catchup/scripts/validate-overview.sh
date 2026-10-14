@@ -17,7 +17,15 @@ expected_headings=(
   '## 10. Important Notes'
 )
 mapfile -t actual_headings < <(grep -E '^#{1,2} ' "$file" || true)
-if [[ "${actual_headings[*]}" != "${expected_headings[*]}" ]]; then
+headings_match=1
+if [[ "${#actual_headings[@]}" -ne "${#expected_headings[@]}" ]]; then
+  headings_match=0
+else
+  for i in "${!expected_headings[@]}"; do
+    [[ "${actual_headings[$i]}" == "${expected_headings[$i]}" ]] || headings_match=0
+  done
+fi
+if [[ "$headings_match" -ne 1 ]]; then
   printf 'Overview must contain exactly the required major sections in order\n' >&2
   exit 1
 fi
