@@ -143,6 +143,8 @@ if [[ -n $selected ]]; then
     cmp -s "$selected" "$expected_ids" ||
       fail 'selected history does not cover the complete initial window'
     [[ $checkpoint == "$head" ]] || fail 'initial checkpoint must cover selected HEAD'
+    draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
+    [[ $draft_history_head == "$head" ]] || fail 'initial history head does not match captured HEAD'
     pending=no
   else
     [[ -f $source_recap ]] || fail 'original recap missing'
@@ -193,6 +195,8 @@ if [[ -n $selected ]]; then
       expected_pending=$(awk -v selected="$selected_count" 'NR>selected {if (n) printf " "; printf "%s", $0; n++} END {if (n) printf "\n"}' "$expected_full")
       [[ $draft_pending == "$expected_pending" ]] || fail 'pending queue does not match remaining history'
     else
+      draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
+      [[ $draft_history_head == "$head" ]] || fail 'history head does not match captured HEAD'
       pending=no
       next_unrepresented=''
     fi

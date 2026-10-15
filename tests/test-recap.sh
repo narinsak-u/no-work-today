@@ -27,6 +27,64 @@ git -C "$fixture/short history" -c user.email=recap@example.test -c user.name=Re
 short="$(bash "$skill/scripts/collect-git-context.sh" "$fixture/short history")"
 [[ "$short" == *"total: 2"* && "$short" == *"older_history: no"* ]] || exit 1
 
+# Initial publications also pin their history state to the captured HEAD.
+initial_repo="$fixture/short history"
+initial_branch="$(git -C "$initial_repo" branch --show-current)"
+initial_head="$(git -C "$initial_repo" rev-parse HEAD)"
+initial_stale_head="$(git -C "$initial_repo" rev-parse HEAD^)"
+initial_selected="$fixture/initial-selected"
+git -C "$initial_repo" rev-list --topo-order --reverse "$initial_head" > "$initial_selected"
+initial_inline="$(awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "}' "$initial_selected")"
+cat > "$fixture/initial-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Committed range:** through $initial_head.
+## 2026-10-12 — Initial history
+- **Category:** testing
+- **Status:** Completed
+- **What / why:** Captured the initial history.
+<details>
+<summary>Technical details and commit evidence</summary>
+- **Important files:** none
+- **Commits:** $initial_inline
+- **Junior notes:** None.
+- **Verification:** not run
+</details>
+- **Impact:** Initial history captured.
+## Current Point
+- **HEAD:** \`$initial_head\` on \`$initial_branch\`
+- **Recap checkpoint:** \`$initial_head\`
+- **Pending committed history:** None
+- **Committed work:** Initial history captured.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** None identified.
+<!-- recap-state
+branch: $initial_branch
+last_commit: $initial_head
+last_updated: 2026-10-12
+history_head: $initial_head
+pending_commits: none
+-->
+DOC
+initial_hash="$( (sha256sum "$fixture/initial-unsigned" 2>/dev/null || shasum -a 256 "$fixture/initial-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$initial_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$fixture/initial-unsigned" > "$fixture/initial-valid-recap"
+bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-valid-recap" "$initial_selected" "$initial_head" INITIAL
+awk -v stale="$initial_stale_head" '
+  /^history_head: / {print "history_head: " stale; next}
+  /^output_sha256: / {next}
+  {print}
+' "$fixture/initial-valid-recap" > "$fixture/initial-stale-unsigned"
+initial_stale_hash="$( (sha256sum "$fixture/initial-stale-unsigned" 2>/dev/null || shasum -a 256 "$fixture/initial-stale-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$initial_stale_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$fixture/initial-stale-unsigned" > "$fixture/initial-stale-recap"
+if initial_error="$(bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-stale-recap" "$initial_selected" "$initial_head" INITIAL 2>&1)"; then
+  echo 'Validator accepted an initial recap with stale history_head' >&2; exit 1
+fi
+[[ "$initial_error" == *'initial history head does not match captured HEAD'* ]] ||
+  { printf 'Wrong initial history-head rejection: %s\n' "$initial_error" >&2; exit 1; }
+
 # Each invocation returns one bounded, oldest-first history batch. Advancing
 # the checkpoint to its final ID continues the next run without gaps.
 checkpoint="$head"
@@ -190,10 +248,23 @@ previous="$(git -C "$repo" rev-parse "$files_commit^")"
 awk -v base="$previous" '/^last_commit: / {print "last_commit: " base; next} /^output_sha256: / {next} {print}' "$recap" > "$fixture/prior-unsigned"
 prior_hash="$( (sha256sum "$fixture/prior-unsigned" 2>/dev/null || shasum -a 256 "$fixture/prior-unsigned") | awk 'NR==1 {print $1}')"
 awk -v hash="$prior_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/prior-unsigned" > "$fixture/prior-recap"
-bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/selected" "$files_commit" "$fixture/prior-recap"
 awk '{printf "%s\r\n", $0}' "$fixture/prior-unsigned" > "$fixture/prior-crlf-unsigned"
 prior_crlf_hash="$( (sha256sum "$fixture/prior-crlf-unsigned" 2>/dev/null || shasum -a 256 "$fixture/prior-crlf-unsigned") | awk 'NR==1 {print $1}')"
 awk -v hash="$prior_crlf_hash" '{sub(/\r$/, ""); if ($0=="-->") printf "output_sha256: %s\r\n", hash; printf "%s\r\n", $0}' "$fixture/prior-crlf-unsigned" > "$fixture/prior-crlf-recap"
+
+# A new publication migrating a legacy recap must add current queue state.
+awk -v current="$files_commit" '
+  /^last_updated: / {print; print "history_head: " current; print "pending_commits: none"; next}
+  /^output_sha256: / {next}
+  {print}
+' "$recap" > "$fixture/caught-up-unsigned"
+caught_up_hash="$( (sha256sum "$fixture/caught-up-unsigned" 2>/dev/null || shasum -a 256 "$fixture/caught-up-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$caught_up_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/caught-up-unsigned" > "$recap"
+cp "$recap" "$fixture/signed"
+awk '/^output_sha256: / {next} {printf "%s\r\n", $0}' "$recap" > "$fixture/crlf-unsigned"
+caught_up_crlf_hash="$( (sha256sum "$fixture/crlf-unsigned" 2>/dev/null || shasum -a 256 "$fixture/crlf-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$caught_up_crlf_hash" '{sub(/\r$/, ""); if ($0=="-->") printf "output_sha256: %s\r\n", hash; printf "%s\r\n", $0}' "$fixture/crlf-unsigned" > "$fixture/crlf-recap"
+bash "$skill/scripts/validate-recap.sh" "$repo" "$recap" "$fixture/selected" "$files_commit" "$fixture/prior-recap"
 bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/crlf-recap" "$fixture/selected" "$files_commit" "$fixture/prior-crlf-recap"
 awk -v prior="$previous" '
   /^## Current Point$/ {
@@ -326,6 +397,23 @@ reject_account_draft
 make_account_draft "\`$account_first\` \`$account_second\` \`$account_last\`" 'All work is documented.'
 bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_draft" "$fixture/account-selected" "$account_last" "$account_prior"
 [[ "$(git -C "$account_repo" hash-object "$account_prior")" == "$account_before" ]] || exit 1
+
+# A caught-up publication must still pin its history head to captured HEAD.
+account_stale_head_unsigned="$fixture/account-stale-head-unsigned"
+awk -v stale="$account_second" '
+  /^history_head: / {print "history_head: " stale; next}
+  /^output_sha256: / {next}
+  {print}
+' "$account_draft" > "$account_stale_head_unsigned"
+account_stale_head_hash="$( (sha256sum "$account_stale_head_unsigned" 2>/dev/null || shasum -a 256 "$account_stale_head_unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$account_stale_head_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$account_stale_head_unsigned" > "$fixture/account-stale-head"
+if stale_head_error="$(bash "$skill/scripts/validate-recap.sh" "$account_repo" "$fixture/account-stale-head" "$fixture/account-selected" "$account_last" "$account_prior" 2>&1)"; then
+  echo 'Validator accepted a caught-up recap with stale history_head' >&2; exit 1
+fi
+[[ "$stale_head_error" == *'history head does not match captured HEAD'* ]] ||
+  { printf 'Wrong stale history-head rejection: %s\n' "$stale_head_error" >&2; exit 1; }
+
 # A partial recap must preserve the exact oldest-first remainder, not just its
 # count, so later invocations cannot skip or duplicate queued history.
 for ((n=4; n<=102; n++)); do git -C "$account_repo" commit --allow-empty -qm "pending $n"; done

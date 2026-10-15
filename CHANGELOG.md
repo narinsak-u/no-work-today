@@ -6,7 +6,7 @@ All notable changes to this repository are documented here. Releases follow sema
 - Recorded manual scenarios and exploratory outputs; valid paired comparisons remain unavailable because the runtime exposed skill resources to no-skill controls; trimmed the catchup example to the documented 150-line ceiling.
 - Added a no-skill isolation preflight to prevent contaminated skill comparisons.
 - Clarified that each recap entry keeps selected commit IDs inline on its single **Commits:** field line, based on 100-commit wording micro-tests.
-- Preserved the exact pending-commit queue in recap state and rejected partial publications without a HEAD-pinned continuation boundary.
+- Required every recap publication, including caught-up updates, to pin `history_head` to captured `HEAD`; preserved the exact pending queue and rejected partial publications without the required continuation boundary.
 - Distinguished the recap helper directory from the target Git root in skill instructions and validator calls.
 - Clarified recap shell-state and helper-root handling, evidence-backed groups of at most ten commits, single-line commit evidence, fail-closed publication, optional Junior notes, and singular/plural pending-history grammar.
 - Fixed the recap shell regression loop under `set -e` when its remaining-commit counter reaches zero.
