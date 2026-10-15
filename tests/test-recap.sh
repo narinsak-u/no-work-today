@@ -49,7 +49,7 @@ while [[ "$checkpoint" != "$head" ]]; do
   selected="$(printf '%s\n' "$page" | awk '/^commit: / {print $2}')"
   printf '%s\n' "$selected" >> "$actual"
   checkpoint="$(printf '%s\n' "$selected" | awk 'END {print}')"
-  ((remaining -= count))
+  ((remaining -= count)) || :
 done
 cmp "$expected" "$actual"
 initial_repeat="$(bash "$skill/scripts/collect-git-context.sh" "$repo")"
