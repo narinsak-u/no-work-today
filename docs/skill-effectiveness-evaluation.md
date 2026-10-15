@@ -189,3 +189,7 @@ The table retains manually assigned task-success / safety / usability scores for
 
 These observations are manually scored, non-randomized, and exploratory; they do not establish causality or generalize beyond these fixtures. The shared preflight must pass before future no-skill score differences are interpreted.
 
+## Final integration verification
+
+At integration commit `79c6cda2fe8084992ac442dca1440edfad692c7b`, `bash tests/test-scripts.sh` exited 0 after the final code review. Output included `Backlog shell scenarios passed.`, `Catch-up shell scenarios passed.`, `Standalone installation scenarios passed.`, `Recap shell scenarios passed.`, and `All shell integration tests passed.` No randomized post-change recap pair is reported: the runtime exposes `skill://to-*` resources to control contexts, so omitting skill instructions does not meet the isolation preflight.
+
