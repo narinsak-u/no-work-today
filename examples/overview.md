@@ -17,37 +17,83 @@ Lantern Notes is a fictional web service for organizing private reading notes an
 The fictional browser client calls an HTTP API. Domain services enforce note and membership rules; a PostgreSQL adapter persists data; a worker refreshes the search index asynchronously.
 
 ```text
-Browser client → HTTP API → Domain services → PostgreSQL
-                         └→ Job queue → Index worker → Search index
+Browser client
+  |
+  v
+HTTP API
+  |
+  v
+Domain services
+  |
+  +--> PostgreSQL
+  |
+  +--> Job queue --> Index worker --> Search index
 ```
 
 The components and relationships above are fictional and would require repository evidence in a real overview.
 
 ## 4. Main Flows
 
-- **Fictional note creation:** API route checks request shape and identity → note service validates content and membership → PostgreSQL adapter saves → API queues an index refresh and returns the note identifier.
-- **Fictional search:** API route → search service applies membership filtering → search index → filtered results. Index freshness and failure behavior need verification in a real system.
-- **Fictional refresh:** worker consumes a refresh job → reads the note through the adapter → updates the index. Retry behavior is illustrative, not verified.
+### 📝 Note request
+
+A fictional request is validated, stored, and returned; each connection is illustrative, not verified runtime behavior.
+
+```text
+Client
+  |
+  v
+Note route
+  |
+  v
+Domain rules
+  |
+  v
+PostgreSQL
+  |
+  v
+Response
+```
+
+This example is a shape demonstration only: every stage and arrow needs repository evidence before use in a real overview.
+
+### 🔄 Index refresh
+
+A fictional background path may refresh search after note changes; its trigger and runtime link need verification.
+
+```text
+Note change
+  |
+  v
+Unknown trigger
+  |
+  v
+Index refresh worker
+  |
+  v
+Search index
+```
 
 ## 5. Core Modules
 
-- **API routes** (`src/routes/notes.ts`): fictional HTTP boundary.
-- **Identity and membership**: fictional caller and access checks.
-- **Note service** (`src/domain/notes.ts`): fictional validation and sharing rules.
-- **Persistence** (`src/storage/postgres.ts`): fictional SQL boundary.
-- **Index worker** (`src/workers/index-refresh.ts`): fictional asynchronous refresh handler.
+Illustrative selective module map; verify directories and responsibilities before claiming them.
 
-These module responsibilities are invented; a real overview must establish them from code.
+```text
+src/
+├── routes/    — fictional request handlers
+├── domain/    — fictional note rules
+├── storage/   — fictional persistence boundary
+└── workers/   — fictional background tasks
+```
 
 ## 6. Important Files
 
 - `src/server.ts` — fictional application entry point.
 - `src/routes/notes.ts` — fictional note request handlers.
 - `src/domain/notes.ts` — fictional domain rules.
-- `src/storage/postgres.ts` and `src/workers/index-refresh.ts` — fictional data and background-work boundaries.
+- `src/storage/postgres.ts` and `src/workers/index-refresh.ts` — illustrative boundaries to inspect.
 - `test/notes.test.ts` — fictional behavior checks.
 
-All paths are safe illustrative placeholders, not claims that these files exist.
+All paths are illustrative placeholders, not claims that these files exist. This reading list is not the module tree.
 
 ## 7. Data & External Services
 

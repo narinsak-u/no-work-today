@@ -18,20 +18,34 @@ Client → Application → Data store
 
 ## 4. Main Flows
 
-Trace two to five representative runtime workflows when project complexity warrants them. Follow actual entrypoints through callers and observable outputs; name supporting paths. Keep diagrams simple (normally five to twelve nodes), with minimal necessary branches. Mark candidate or unknown links explicitly; omit unsupported claims.
+Trace two to five representative runtime workflows when project complexity warrants them. Each flow has a short subheading, a one-sentence explanation, and a simple plain-text diagram grounded in the observed entry, meaningful processing stages, and observable output. Keep the primary path vertical; use short lateral branches only for real, verified branches. Name evidence paths, mark unknown links explicitly, and omit unsupported claims.
 
 ```text
-Observed: request → validated handler → persisted result → response
-Needs verification: detected candidate → runtime startup
+Request
+  |
+  v
+Validated handler
+  |
+  v
+Persisted result
+  |
+  v
+Response
 ```
 
 ## 5. Core Modules
 
-Group the important functional modules by responsibility and give their repository locations. Put the selective project map here rather than reproducing a full tree.
+Show a selective tree of the usual three to seven important functional areas, grouped under relevant parent directories, with brief responsibility labels. Keep it to useful levels and omit irrelevant directories.
+
+```text
+src/
+├── auth/       — identity and sessions
+└── reports/    — report generation
+```
 
 ## 6. Important Files
 
-Select a few files a developer should open first and explain why each matters. Include paths supported by repository evidence; avoid duplicating the full module map.
+Give a separate, short reading list of files a developer should open first, with why each matters. Cite repository evidence; do not reproduce the module tree or turn this into a directory map.
 
 ## 7. Data & External Services
 
@@ -49,7 +63,7 @@ Give a short, practical reading order for a new developer's first 15–30 minute
 
 Keep this section limited to repository-specific security cautions, operational invariants, setup requirements, generated-file warnings, ownership or deployment unknowns, and evidence gaps. Use precise paths and commands where useful.
 
-Keep the overview concise and useful, normally readable in a few minutes; roughly 80–150 lines only where warranted. Prefer verified facts over completeness, and do not pad. Use occasional purposeful emoji only in short labels or callouts. Keep headings, diagrams, paths, commands, and code plain.
+Keep the overview concise and useful, normally readable in a few minutes; roughly 80–150 lines only where warranted. Prefer verified facts over completeness, and do not pad. Use purposeful emoji only in short Main Flow or Core Modules subheadings. Keep the ten numbered headings exact; diagrams, paths, commands, and code remain emoji-free.
 
 <!-- skill-state
 output_sha256: <64 lowercase hexadecimal characters>
