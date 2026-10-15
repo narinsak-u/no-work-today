@@ -326,6 +326,132 @@ reject_account_draft
 make_account_draft "\`$account_first\` \`$account_second\` \`$account_last\`" 'All work is documented.'
 bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_draft" "$fixture/account-selected" "$account_last" "$account_prior"
 [[ "$(git -C "$account_repo" hash-object "$account_prior")" == "$account_before" ]] || exit 1
+# A partial recap must preserve the exact oldest-first remainder, not just its
+# count, so later invocations cannot skip or duplicate queued history.
+for ((n=4; n<=102; n++)); do git -C "$account_repo" commit --allow-empty -qm "pending $n"; done
+account_head="$(git -C "$account_repo" rev-parse HEAD)"
+account_legacy_prior="$fixture/account-legacy-prior"
+cat > "$fixture/account-legacy-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Committed range:** through $account_base.
+## 2026-10-10 — Published checkpoint
+- **Category:** testing
+- **Status:** Completed
+- **What / why:** Preserved prior work.
+- **Important files:** none
+- **Commits:** \`$account_base\`
+- **Impact:** Checkpoint documented.
+- **Junior notes:** None.
+- **Verification:** not run
+## Current Point
+- **HEAD:** \`$account_head\` on \`$account_branch\`
+- **Recap checkpoint:** \`$account_base\`
+- **Pending committed history:** 102 commits remain; oldest unrepresented: \`$account_first\`
+- **Committed work:** Earlier entry.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** Account for pending work.
+<!-- recap-state
+branch: $account_branch
+last_commit: $account_base
+last_updated: 2026-10-10
+-->
+DOC
+account_legacy_hash="$( (sha256sum "$fixture/account-legacy-unsigned" 2>/dev/null || shasum -a 256 "$fixture/account-legacy-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$account_legacy_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$fixture/account-legacy-unsigned" > "$account_legacy_prior"
+account_full_history="$fixture/account-full-history"
+git -C "$account_repo" rev-list --topo-order --reverse "$account_base..$account_head" > "$account_full_history"
+account_partial_selected="$fixture/account-partial-selected"
+awk 'NR<=100' "$account_full_history" > "$account_partial_selected"
+account_partial_checkpoint="$(awk 'NR==100 {print; exit}' "$account_full_history")"
+account_next_unrepresented="$(awk 'NR==101 {print; exit}' "$account_full_history")"
+account_remaining_queue="$(awk 'NR>100 {printf "%s%s", separator, $0; separator=" "} END {print ""}' "$account_full_history")"
+account_selected_inline="$(awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "}' "$account_partial_selected")"
+account_partial_draft="$fixture/account-partial-draft"
+cat > "$fixture/account-partial-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Committed range:** through $account_base.
+## 2026-10-10 — Published checkpoint
+- **Category:** testing
+- **Status:** Completed
+- **What / why:** Preserved prior work.
+- **Important files:** none
+- **Commits:** \`$account_base\`
+- **Impact:** Checkpoint documented.
+- **Junior notes:** None.
+- **Verification:** not run
+## 2026-10-12 — First bounded batch
+- **Category:** testing
+- **Status:** Completed
+- **What / why:** Account for the first bounded batch.
+<details>
+<summary>Technical details and commit evidence</summary>
+
+- **Important files:** none
+- **Commits:** $account_selected_inline
+- **Junior notes:** None.
+- **Verification:** not run
+</details>
+- **Impact:** Records the selected history.
+## Current Point
+- **HEAD:** \`$account_head\` on \`$account_branch\`
+- **Recap checkpoint:** \`$account_partial_checkpoint\`
+- **Pending committed history:** 2 commits remain; oldest unrepresented: \`$account_next_unrepresented\`
+- **Committed work:** The first 100 eligible commits are represented.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** Continue with the remaining queue.
+<!-- recap-state
+branch: $account_branch
+last_commit: $account_partial_checkpoint
+last_updated: 2026-10-12
+history_head: $account_head
+pending_commits: $account_remaining_queue
+-->
+DOC
+account_partial_hash="$( (sha256sum "$fixture/account-partial-unsigned" 2>/dev/null || shasum -a 256 "$fixture/account-partial-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$account_partial_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$fixture/account-partial-unsigned" > "$account_partial_draft"
+account_missing_queue_unsigned="$fixture/account-missing-queue-unsigned"
+awk '!/^(history_head|pending_commits|output_sha256): /' "$account_partial_draft" > "$account_missing_queue_unsigned"
+account_missing_queue_hash="$( (sha256sum "$account_missing_queue_unsigned" 2>/dev/null || shasum -a 256 "$account_missing_queue_unsigned") | awk 'NR==1 {print $1}')"
+account_missing_queue="$fixture/account-missing-queue"
+awk -v hash="$account_missing_queue_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$account_missing_queue_unsigned" > "$account_missing_queue"
+if queue_error="$(bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_missing_queue" "$account_partial_selected" "$account_head" "$account_legacy_prior" 2>&1)"; then
+  echo 'Validator accepted a partial recap without its remaining commit queue' >&2; exit 1
+fi
+[[ "$queue_error" == *'remaining history requires pinned pending queue'* ]] ||
+  { printf 'Wrong rejection: %s\n' "$queue_error" >&2; exit 1; }
+account_wrong_queue_ids="$(printf '%s\n' "$account_remaining_queue" | awk '{print $2, $1}')"
+account_wrong_queue_unsigned="$fixture/account-wrong-queue-unsigned"
+awk -v wrong="$account_wrong_queue_ids" '/^pending_commits: / {print "pending_commits: " wrong; next} /^output_sha256: / {next} {print}' \
+  "$account_partial_draft" > "$account_wrong_queue_unsigned"
+account_wrong_queue_hash="$( (sha256sum "$account_wrong_queue_unsigned" 2>/dev/null || shasum -a 256 "$account_wrong_queue_unsigned") | awk 'NR==1 {print $1}')"
+account_wrong_queue="$fixture/account-wrong-queue"
+awk -v hash="$account_wrong_queue_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$account_wrong_queue_unsigned" > "$account_wrong_queue"
+if queue_error="$(bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_wrong_queue" "$account_partial_selected" "$account_head" "$account_legacy_prior" 2>&1)"; then
+  echo 'Validator accepted a partial recap with an incorrect remaining commit queue' >&2; exit 1
+fi
+[[ "$queue_error" == *'pending queue does not match remaining history'* ]] ||
+  { printf 'Wrong rejection: %s\n' "$queue_error" >&2; exit 1; }
+bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_partial_draft" "$account_partial_selected" "$account_head" "$account_legacy_prior"
+
+# Junior notes are optional in the template, so a candidate may omit them.
+account_no_notes_unsigned="$fixture/account-no-notes-unsigned"
+awk '/^## 2026-10-12 — First bounded batch$/ {new_entry=1} /^## Current Point$/ {new_entry=0} new_entry && /^- \*\*Junior notes:\*\* / {next} !/^output_sha256: /' "$account_partial_draft" > "$account_no_notes_unsigned"
+account_no_notes_hash="$( (sha256sum "$account_no_notes_unsigned" 2>/dev/null || shasum -a 256 "$account_no_notes_unsigned") | awk 'NR==1 {print $1}')"
+account_no_notes="$fixture/account-no-notes"
+awk -v hash="$account_no_notes_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
+  "$account_no_notes_unsigned" > "$account_no_notes"
+if ! bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_no_notes" "$account_partial_selected" "$account_head" "$account_legacy_prior"; then
+  echo 'Validator rejected a recap without optional Junior notes' >&2; exit 1
+fi
+
 # An interrupted draft that accounts for one rather than all 1,007 commits
 # cannot advance the checkpoint or modify the already published recap.
 cp "$expected" "$fixture/incomplete"

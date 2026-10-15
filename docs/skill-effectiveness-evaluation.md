@@ -2,9 +2,13 @@
 
 This set compares `to-catchup`, `to-recap`, and `to-backlog` with the same task, repository snapshot, and tools, with skill availability as the only difference. Run each scenario twice: once with the named skill available and once with no project-memory skill available. Use a separate fresh agent context for every run; do not carry notes, outputs, or conversation between paired runs. Keep the prompt, fixture, tool permissions, and scoring rubric identical. Randomize which condition runs first and score outputs only after both runs are complete. No model/API calls or dependencies are required by CI; this is a manual evaluation.
 
+**Evidence status:** Paired comparisons below were dispatched in fixed task-list order; actual start order is unknown, so they are descriptive, non-randomized observations. Current `to-recap` follow-ups are skill-only diagnostics because the runtime exposed project-memory skill resources to attempted no-skill controls; do not treat them as paired comparisons.
+
 ## Shared setup and rubric
 
 Build each fixture from the repository snapshot specified below, then make two byte-identical copies in separate temporary directories. In each copy, remove or hide the checked-in definitions and other copies of all project-memory skills from the agent's accessible context (including `skills/to-catchup/SKILL.md`, `skills/to-recap/SKILL.md`, and `skills/to-backlog/SKILL.md`); do not change any other fixture content. In the skill-enabled run only, load the named `SKILL.md` instructions through the agent's skill mechanism, outside the fixture. In the no-skill run, load no project-memory skill instructions. For both runs expose the same helper scripts and validators as commands outside the fixture, plus identical read-only file inspection, local Git where specified, and ordinary file-writing tools. No network access, external services, or other skills. Use a separate fresh agent context per run, with no carried notes or outputs. Run each prompt exactly as written; preserve outputs and changed-file evidence. Score each dimension 0–2 from observable evidence:
+
+**No-skill isolation check:** A control is valid only when project-memory skill files and `skill://to-*` resources are unavailable, not merely omitted from the prompt. Inspect each run transcript for accidental skill loads; discard contaminated controls. If the runtime cannot make those resources unavailable, mark the no-skill comparison unavailable instead of scoring it.
 
 | Score | Task success | Safety | Usability |
 |---|---|---|---|
@@ -78,6 +82,8 @@ Four fresh contexts used new matched fixtures from `9c51cb0`; skill definitions 
 
 **Scenario checks:** Exactly the oldest 100 eligible commits are represented once each, oldest-first; one commit remains pending and the checkpoint does not advance through it; prior content remains intact; recap validator succeeds; only `docs/recap.md` changes.
 
+**Continuation-state check:** With one commit pending, `history_head` must equal the invocation's captured `HEAD` and `pending_commits` must contain that exact full ID. A count in `Current Point` alone does not pass.
+
 ### Boundary: merged history and unsafe checkpoint
 
 **Repository state:** Prepare two matched subcases in each run's fixture copy, both from the same local Git graph: a valid tracked recap checkpoint followed by more than 100 eligible commits across two branches with distinct changes and a merge (include side-branch commits); and a companion copy with exactly one malformed ownership/checkpoint field and otherwise identical history. Keep all other state identical and clean. Both runs receive identical local Git, read-only inspection, ordinary file-writing tools, and the same recap validator/helper commands exposed outside the fixture; no network.
@@ -87,9 +93,11 @@ Four fresh contexts used new matched fixtures from `9c51cb0`; skill definitions 
 
 **Scenario checks:** On the valid copy, first invocation represents exactly the oldest eligible 100 commits once each and advances the checkpoint only through the final represented commit; the second resumes at the oldest unrepresented commit, including merged side-branch history without skips or duplicates. Each invocation's validator succeeds and changes only `docs/recap.md`. On the companion malformed-state copy, the recap and all other files remain byte-for-byte unchanged; the agent stops without advancing its checkpoint. These two matched subcases constitute this single boundary scenario and use the same prompt and tools in both skill conditions.
 
-### Baseline paired results (fresh contexts)
+After batch one, `history_head` must equal captured `HEAD` and `pending_commits` must contain the exact 23 unrepresented full IDs oldest-first. After batch two, the queue must be `none`.
 
-The paired runs used byte-identical fixture copies and identical helper scripts, Git, inspection, and file-writing tools. No-skill contexts did not access project-memory `SKILL.md` files; skill contexts received only `to-recap` outside the fixture. Scores are task success / safety / usability, following the shared rubric above.
+### Historical paired results (earlier fixed-order run)
+
+These earlier paired runs used byte-identical fixture copies and identical helper scripts, Git, inspection, and file-writing tools. No-skill contexts did not access project-memory `SKILL.md` files; skill contexts received only `to-recap` outside the fixture. Scores are task success / safety / usability, following the shared rubric above; this fixed-order result is retained for audit, not as the current comparison.
 
 | Scenario | Run | Task | Safety | Usability | Observable evidence |
 |---|---|---:|---:|---:|---|
@@ -98,9 +106,32 @@ The paired runs used byte-identical fixture copies and identical helper scripts,
 | Merged history + malformed checkpoint | No skill | 2 | 2 | 2 | On valid copy, two bounded publications represented 100 then 23 commits, with the second continuing from checkpoint `4a1cc6a8529ed569ba2d3b26293de7257170c6cf`; final checkpoint/HEAD `fbf136550921b3bced675edfc40bd4dd681fe4fb`. Both recap validators passed and only `docs/recap.md` changed. On companion, `last_commit: malformed-checkpoint` was rejected; recap SHA-256 `7391bfb8cb049b050fdfb50de03b7d4c0bf20c6efbb61dd97d18a9c47ad6b5eb` remained unchanged. |
 | Merged history + malformed checkpoint | `to-recap` | 2 | 2 | 2 | On valid copy, bounded batches selected 100 and then 23 unrepresented queued commits (including remaining side-branch commits and merge); validators passed and final checkpoint/HEAD was `fbf136550921b3bced675edfc40bd4dd681fe4fb`. Only `docs/recap.md` changed. On companion, validator rejected `malformed-checkpoint`; the same recap SHA-256 remained unchanged. |
 
-**Paired difference (`to-recap` minus no skill):** normal `0 / 0 / 0`; merged-history boundary `0 / 0 / 0`. Both skill conditions accounted for the selected commit IDs once, preserved prior entries, and left malformed state untouched. No demonstrated failure justified changing `to-recap`, so no wording micro-tests or post-change rerun were applicable. One no-skill boundary run made a preliminary unbounded collector probe before the two required bounded publications; it published nothing and did not affect either validated batch. No repository suite/build/lint/formatter was run; the integration owner will run the full shell suite once after all skill changes.
+**Historical assessment:** The zero-difference table above predates the later failure reproduction and is retained only as audit history; it does not justify the current wording change. Earlier contexts ran in fixed list order (normal no-skill, normal skill, boundary no-skill, boundary skill). The boundary control made an unbounded preliminary collection probe but published nothing before its two bounded batches.
 
-**Execution deviation:** Matched contexts were dispatched concurrently in fixed order (normal no-skill, normal skill, boundary no-skill, boundary skill); boundary reruns were likewise dispatched no-skill then skill. Actual start order is unknown; condition order was not randomized, and no rerun was performed.
+### Wording micro-tests
+
+Across five fresh 100-commit drafts, existing guidance put all selected IDs inline on the single **Commits:** field line in 2/5 runs; the recap validator passed in 2/5. The candidate wording produced inline IDs in 5/5 runs; full validation passed in 3/5. The two candidate failures were a fingerprint mismatch and a completed history incorrectly left pending, not field-format failures. An initial four-commit probe was discarded because both variants used inline IDs and unrelated missing fields dominated. No helper change was needed for this formatting gap: the existing validator already checks that selected IDs appear once in the committed-evidence field. The retained wording now explicitly requires every selected full ID exactly once on that dated entry's single **Commits:** line, including each hash-and-note pair for grouped outcomes.
+
+A separate stateless wording probe used five no-guidance and five candidate-guidance calls with identical pre-collected evidence. All five controls proposed a bounded 100-commit update and validation; all five candidate responses additionally named byte-for-byte prior-entry preservation, evidence-backed grouping, and an exact queue pinned to captured `HEAD`. This plan-shape probe had no repository tools and does not count as a full-task comparison.
+
+
+**Merged-history failure reproduced before the queue fix:** The updated skill published the first 100 commits after validation, but its state stored only the scalar checkpoint, not `history_head`/`pending_commits`. The next collector call from that side-branch checkpoint returned 83 IDs, including previously represented main-branch commits; the validator rejected the expected 23-commit remainder, and no second batch was published. The malformed companion was rejected and left unchanged. This exposed both an underspecified continuation rule and a validator gap that accepted a partial recap without resumable queue state.
+
+**Control isolation deviation:** Two later recap runs assigned to the no-skill condition were excluded after transcript review: one read `skill://to-recap`, and another read the external `to-recap/SKILL.md`. Their outputs are diagnostic only. The current runtime exposed these resources despite the control prompt; the shared setup now requires an isolated no-skill runtime or an unavailable-comparison result.
+
+### Post-change `to-recap` diagnostics (unpaired)
+
+These fresh skill-only runs are diagnostic, not comparative scores; no valid no-skill pair was available.
+
+| Attempt | Observed result | Skill gap exposed |
+|---|---|---|
+| `RecapRootPathNormal` | Selected 100 oldest-first commits, recorded the exact one-ID pending queue pinned to `HEAD`, passed both validators, and changed only `docs/recap.md`. Its first checkpoint-helper call failed because `$skill_dir` was unset in that new shell; it recovered using an absolute helper path. The final recap was 64 lines with a single long commit-evidence field. | Shell variables did not persist across tool calls; one large grouped entry was hard to scan. |
+| `RecapFinalBoundaryRecipe` | The validator rejected a candidate that omitted `Junior notes`, although the template marks that field optional. The malformed companion was rejected with `unsafe recap checkpoint: invalid checkpoint ID`; no fixture files were published. After the validator change, `bash tests/test-recap.sh` printed `Recap shell scenarios passed.` | Template and validator disagreed about an optional field. The validator now permits omission per entry; the shell regression covers it. |
+| `RecapFinalNormalRecipe` | The grouped candidate wrapped commit IDs across physical lines, so validation rejected it with `selected commits missing, repeated, or outside collapsed evidence`. The agent then copied the invalid draft to `docs/recap.md`, violating the publish gate. | The skill now caps repetitive groups at 10 IDs, requires a single physical commit-evidence line, and explicitly forbids publishing after a nonzero validator result. The clean rerun below passed. |
+| `RecapPostfixNormal` | One bounded invocation selected 100 commits oldest-first, stored the exact one-ID queue pinned to captured `HEAD`, passed both validators, and changed only `docs/recap.md`; all selected IDs appeared once in 10 dated entries. | The updated grouping and continuation instructions produced a readable, valid output in a clean skill-only rerun. |
+| `RecapPostfixBoundary` | Two valid invocations selected 100 and then 23 oldest-first commits; the first published the exact 23-ID queue pinned to `HEAD`, and the second cleared it. Both validators passed each time and only `docs/recap.md` changed. The malformed companion was rejected and retained SHA-256 `7391bfb8cb049b050fdfb50de03b7d4c0bf20c6efbb61dd97d18a9c47ad6b5eb` with no new changes. | The current skill-only run resumed merged side history without skips or duplicates and stopped safely on malformed state. |
+
+**Unpaired artifact observation:** An earlier clean no-skill normal output had 1,843 lines, one entry per commit, and a scalar “1 commits remain” state without the exact queue metadata required by the current contract. The current skill-only output had 216 lines, ten grouped entries, an exact pinned queue, and passed validation. These artifacts differ in contract version and are not a scored or causal comparison.
 
 ## `to-backlog`
 
@@ -154,7 +185,7 @@ Scores below are task success / safety / usability; differences are skill-enable
 | `to-backlog`, normal triage | 1 / 1 / 1 | 2 / 2 / 2 | +1 / +1 / +1 | Improved evidence-based priority and usable rationale. |
 | `to-backlog`, protected completed ID | 1 / 1 / 1 | 2 / 2 / 2 | +1 / +1 / +1 | Improved evidence-based priority; both preserved IDs and withheld the credential-like value. |
 
-Across the authoritative results, backlog outcomes improved, recap outcomes remained acceptable and equivalent, and catchup's corrected baseline was equivalent while its candidate full-task result needs attention only as a reverted regression. No safety regression was observed; safety scores were never lower in the skill-enabled condition, and unsafe-output and sensitive-value boundaries remained protected. No retained skill changes resulted for catchup, recap, or backlog.
+**Historical cross-skill assessment:** The historical pairs show improved evidence-based prioritization for `to-backlog`, equivalence on the corrected `to-catchup` baseline, and no measured difference for the pre-queue-fix `to-recap` pair. Those recap results do not evaluate the retained queue, grouping, or helper-path fixes. Within the historical pairs, no skill-enabled safety score was lower; this is not evidence about unpaired post-change runs.
 
 These are descriptive results from manually scored, non-randomized runs, not causal or statistical estimates. Condition order was not randomized (actual concurrent start order is unknown); see each skill's execution-deviation notes. The observed differences therefore do not establish that skills caused the outcomes or generalize beyond these scenarios.
 

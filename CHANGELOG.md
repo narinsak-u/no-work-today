@@ -4,6 +4,11 @@ All notable changes to this repository are documented here. Releases follow sema
 
 ## [Unreleased]
 - Added and ran paired skill-effectiveness evaluations; trimmed the catchup example to the documented 150-line ceiling.
+- Added a no-skill isolation preflight to prevent contaminated skill comparisons.
+- Clarified that each recap entry keeps selected commit IDs inline on its single **Commits:** field line, based on 100-commit wording micro-tests.
+- Preserved the exact pending-commit queue in recap state and rejected partial publications without a HEAD-pinned continuation boundary.
+- Distinguished the recap helper directory from the target Git root in skill instructions and validator calls.
+- Clarified recap shell-state and helper-root handling, evidence-backed groups of at most ten commits, single-line commit evidence, fail-closed publication, optional Junior notes, and singular/plural pending-history grammar.
 - Fixed the recap shell regression loop under `set -e` when its remaining-commit counter reaches zero.
 - Reworked catchup overviews around ten evidence-based sections, tightened exact ordered-heading validation, and updated the fictional example and regression coverage.
 - Improved catchup Main Flows with concise vertical diagrams and selective Core Modules trees while preserving the ten-heading and safety contracts.
