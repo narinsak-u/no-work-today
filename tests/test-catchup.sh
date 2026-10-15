@@ -54,9 +54,24 @@ Unknown.
 ## 3. Architecture
 Application handles requests.
 ## 4. Main Flows
+### 🔁 Request
+Observed: the request reaches a handler and returns a response.
 ```text
-Observed: request → handler → response
-Candidate: src/main.rs → runtime behavior needs verification
+Request
+  |
+  v
+Handler
+  |
+  v
+Response
+```
+### 🔎 Candidate
+Candidate: the entrypoint is a lead, not a verified runtime path.
+```text
+src/main.rs
+  |
+  v
+Needs verification
 ```
 ## 5. Core Modules
 `src/` contains application code.
@@ -76,6 +91,9 @@ bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md
 for heading in '## 1. Purpose' '## 5. Core Modules' '## 6. Important Files' '## 8. Development Workflow' '## 10. Important Notes'; do
   grep -Fxq "$heading" "$fixture/my project/docs/overview.md" || exit 1
 done
+[[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 10 ]] || exit 1
+[[ "$(grep -c '^### ' "$fixture/my project/docs/overview.md")" -eq 2 ]] || exit 1
+[[ "$(grep -c '^  |$' "$fixture/my project/docs/overview.md")" -ge 2 ]] || exit 1
 [[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 10 ]] || exit 1
 grep -Fq 'Observed:' "$fixture/my project/docs/overview.md"
 grep -Fq 'Candidate:' "$fixture/my project/docs/overview.md"
