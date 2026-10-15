@@ -191,5 +191,5 @@ These observations are manually scored, non-randomized, and exploratory; they do
 
 ## Final integration verification
 
-At integration commit `79c6cda2fe8084992ac442dca1440edfad692c7b`, `bash tests/test-scripts.sh` exited 0 after the final code review. Output included `Backlog shell scenarios passed.`, `Catch-up shell scenarios passed.`, `Standalone installation scenarios passed.`, `Recap shell scenarios passed.`, and `All shell integration tests passed.` No randomized post-change recap pair is reported: the runtime exposes `skill://to-*` resources to control contexts, so omitting skill instructions does not meet the isolation preflight.
+At integration commit `4a19c843c7175b5fe7aa4f822ee7b80a793bf873`, `bash tests/test-scripts.sh` exited 0. Output included `Backlog shell scenarios passed.`, `Catch-up shell scenarios passed.`, `Standalone installation scenarios passed.`, `Recap shell scenarios passed.`, and `All shell integration tests passed.` The recap scenarios cover valid and stale `history_head` values for initial and caught-up publications. Final code review found no actionable code defect. No randomized post-change recap pair is reported: the runtime exposes `skill://to-*` resources to control contexts, so omitting skill instructions does not meet the isolation preflight.
 
