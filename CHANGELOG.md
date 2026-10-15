@@ -3,7 +3,7 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
-- Added and ran evidence-scored paired evaluations for all three project-memory skills, including ownership, merged-history, and sensitive-backlog boundaries.
+- Added and ran paired skill-effectiveness evaluations; trimmed the catchup example to the documented 150-line ceiling.
 - Fixed the recap shell regression loop under `set -e` when its remaining-commit counter reaches zero.
 - Reworked catchup overviews around ten evidence-based sections, tightened exact ordered-heading validation, and updated the fictional example and regression coverage.
 - Improved catchup Main Flows with concise vertical diagrams and selective Core Modules trees while preserving the ten-heading and safety contracts.
