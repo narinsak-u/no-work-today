@@ -14,6 +14,7 @@ DGA Dashboard presents Thailand public agencies' digital-government assessment r
 ## 3. Architecture
 
 ```text
+Report CSVs and generated inputs
   |
   v
 Generators
@@ -92,14 +93,21 @@ Batch validation
   |
   v
 Published manifest and current.json
-
-Authenticated /api/me/report.pdf
+  |
+  v
+Validated published PDF artifact
+  |
+  v
+Offline publication complete; later request is separate
+  |
+  v
+Authenticated /api/me/report.pdf request
   |
   v
 Organization claim lookup
   |
   v
-Published PDF
+Published PDF response
 ```
 
 ### 🚀 Production serving
@@ -136,12 +144,6 @@ report-pdf/
 └── src/           — report preparation and publication
 ```
 
-### 🧭 Project areas
-
-- **Browser dashboard** (`apps/web/`): route components, session hooks, and typed API client.
-- **Web data preparation** (`apps/web/scripts/`): JSON generation and chart capture.
-- **API server** (`crates/server/src/`): routing, auth, SQLite, and report delivery.
-- **Report pipeline** (`report-pdf/src/`): input preparation, rendering, and publication.
 
 ## 6. Important Files
 
@@ -186,5 +188,5 @@ Commands below are documented in manifests, `Justfile`, and repository guidance;
 - `docs/recap.md` and `docs/backlog.md` were not present. External production hosting, secret provisioning, and persistent-volume ownership are not defined here; verify deployment configuration before operating production.
 
 <!-- skill-state
-output_sha256: 15cb365f216ccacc85ed7f2c8db8572167dcc0a1300f1a2afa1799b886f6ac4a
+output_sha256: 06e59c5e440d1d96d0b6ba93bc5c4a07299f72aea9527292da989d9663581546
 -->

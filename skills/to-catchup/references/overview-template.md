@@ -62,7 +62,6 @@ Give a short, practical reading order for a new developer's first 15–30 minute
 ## 10. Important Notes
 
 Keep this section limited to repository-specific security cautions, operational invariants, setup requirements, generated-file warnings, ownership or deployment unknowns, and evidence gaps. Use precise paths and commands where useful.
-- Main Flows use concise, evidence-backed vertical diagrams with emoji only in short flow subheadings; Core Modules uses a selective three-to-seven-area tree with responsibility labels, separate from the Important Files reading list.
 
 Keep the overview concise and useful, normally readable in a few minutes; roughly 80–150 lines only where warranted. Prefer verified facts over completeness, and do not pad. Use purposeful emoji only in short Main Flow or Core Modules subheadings. Keep the ten numbered headings exact; diagrams, paths, commands, and code remain emoji-free.
 

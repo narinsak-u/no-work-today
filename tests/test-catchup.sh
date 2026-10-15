@@ -94,7 +94,6 @@ done
 [[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 10 ]] || exit 1
 [[ "$(grep -c '^### ' "$fixture/my project/docs/overview.md")" -eq 2 ]] || exit 1
 [[ "$(grep -c '^  |$' "$fixture/my project/docs/overview.md")" -ge 2 ]] || exit 1
-[[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 10 ]] || exit 1
 grep -Fq 'Observed:' "$fixture/my project/docs/overview.md"
 grep -Fq 'Candidate:' "$fixture/my project/docs/overview.md"
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
