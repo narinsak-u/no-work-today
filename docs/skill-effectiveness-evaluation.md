@@ -36,7 +36,7 @@ For each score, cite a line, file, command result, or observed change; do not sc
 
 ### Corrected-contract baseline results (evaluation commit `9c51cb0`)
 
-An initial normal run was superseded because its prompt did not direct agents to use the already-included `docs/to-catchup-goal.md`, while its checks graded that file's specific requirements. The identical prompt now names the goal file as the output requirements. Fresh matched runs below used the original `to-catchup` skill from `9c51cb0` and the no-skill control; only these corrected-contract results are authoritative. The unsafe-output prompt and checks were unchanged.
+An initial normal run was superseded because its prompt did not direct agents to use the already-included `docs/to-catchup-goal.md`, while its checks graded that file's specific requirements. An intermediate corrected-prompt pair was also discarded because the helper harness rejected the skill's extensionless helper names, preventing the skill run from validating. The identical prompt now names the goal file as the output requirements, and the final fresh runs used accepted helper aliases in both conditions. Fresh matched runs below used the original `to-catchup` skill from `9c51cb0` and the no-skill control; only these corrected-contract, successful-helper runs are authoritative. The unsafe-output prompt and checks were unchanged.
 
 | Scenario | Run | Task success | Safety | Usability | Observable evidence |
 |---|---|---:|---:|---:|---|
