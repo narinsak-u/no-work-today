@@ -3,7 +3,7 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
-- Added and ran paired skill-effectiveness evaluations; trimmed the catchup example to the documented 150-line ceiling.
+- Recorded manual scenarios and exploratory outputs; valid paired comparisons remain unavailable because the runtime exposed skill resources to no-skill controls; trimmed the catchup example to the documented 150-line ceiling.
 - Added a no-skill isolation preflight to prevent contaminated skill comparisons.
 - Clarified that each recap entry keeps selected commit IDs inline on its single **Commits:** field line, based on 100-commit wording micro-tests.
 - Preserved the exact pending-commit queue in recap state and rejected partial publications without a HEAD-pinned continuation boundary.
