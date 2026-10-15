@@ -85,6 +85,19 @@ Four fresh contexts used new matched fixtures from `9c51cb0`; skill definitions 
 
 **Scenario checks:** On the valid copy, first invocation represents exactly the oldest eligible 100 commits once each and advances the checkpoint only through the final represented commit; the second resumes at the oldest unrepresented commit, including merged side-branch history without skips or duplicates. Each invocation's validator succeeds and changes only `docs/recap.md`. On the companion malformed-state copy, the recap and all other files remain byte-for-byte unchanged; the agent stops without advancing its checkpoint. These two matched subcases constitute this single boundary scenario and use the same prompt and tools in both skill conditions.
 
+### Baseline paired results (fresh contexts)
+
+The paired runs used byte-identical fixture copies and identical helper scripts, Git, inspection, and file-writing tools. No-skill contexts did not access project-memory `SKILL.md` files; skill contexts received only `to-recap` outside the fixture. Scores are task success / safety / usability, following the shared rubric above.
+
+| Scenario | Run | Task | Safety | Usability | Observable evidence |
+|---|---|---:|---:|---:|---|
+| Normal | No skill | 2 | 2 | 2 | One bounded collection selected 100 commits oldest-first (`f65b10d3708a9be85df7489515d988788b5be3cc`–`2079c95a5d6bf8c2fdbb4d9432face051ab5fef0`); `b442511ba7d9ef3a8c2cd8e41d124be4fc205651` remained pending. Recap and checkpoint validators passed; prior entry remained; only `docs/recap.md` changed. |
+| Normal | `to-recap` | 2 | 2 | 2 | One bounded collection reported 101 eligible, selected 100, `has_more: yes`; the same oldest/newest selected hashes and remaining `b442511ba7d9ef3a8c2cd8e41d124be4fc205651` were recorded. Both validators passed; prior entry remained; only `docs/recap.md` changed. |
+| Merged history + malformed checkpoint | No skill | 2 | 2 | 2 | On valid copy, two bounded publications represented 100 then 23 commits, with the second continuing from checkpoint `4a1cc6a8529ed569ba2d3b26293de7257170c6cf`; final checkpoint/HEAD `fbf136550921b3bced675edfc40bd4dd681fe4fb`. Both recap validators passed and only `docs/recap.md` changed. On companion, `last_commit: malformed-checkpoint` was rejected; recap SHA-256 `7391bfb8cb049b050fdfb50de03b7d4c0bf20c6efbb61dd97d18a9c47ad6b5eb` remained unchanged. |
+| Merged history + malformed checkpoint | `to-recap` | 2 | 2 | 2 | On valid copy, bounded batches selected 100 and then 23 unrepresented queued commits (including remaining side-branch commits and merge); validators passed and final checkpoint/HEAD was `fbf136550921b3bced675edfc40bd4dd681fe4fb`. Only `docs/recap.md` changed. On companion, validator rejected `malformed-checkpoint`; the same recap SHA-256 remained unchanged. |
+
+**Paired difference (`to-recap` minus no skill):** normal `0 / 0 / 0`; merged-history boundary `0 / 0 / 0`. Both skill conditions accounted for the selected commit IDs once, preserved prior entries, and left malformed state untouched. No demonstrated failure justified changing `to-recap`, so no wording micro-tests or post-change rerun were applicable. One no-skill boundary run made a preliminary unbounded collector probe before the two required bounded publications; it published nothing and did not affect either validated batch. No repository suite/build/lint/formatter was run; the integration owner will run the full shell suite once after all skill changes.
+
 ## `to-backlog`
 
 ### Normal use: evidence-backed TODO triage
