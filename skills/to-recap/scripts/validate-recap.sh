@@ -98,8 +98,16 @@ awk -v old_prefix_lines="$old_prefix_lines" '
   /^- \*\*Committed work:\*\* / {committed++}
   /^- \*\*Uncommitted work:\*\* / {uncommitted++}
   /^- \*\*Next safe point:\*\* / {safe_points++}
-  END {if (invalid || title!=1 || scope!=1 || current!=1 || entries<1 || categories!=entries || statuses!=entries || whys!=entries || files!=entries || commits!=entries || impacts!=entries || verifications!=entries || heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 || uncommitted!=1 || safe_points!=1) exit 1}
-' "$recap" || fail 'required sections or work-entry fields missing'
+  END {
+    empty=(checkpoint=="none")
+    if (invalid || title!=1 || scope!=1 || current!=1 ||
+        (empty ? entries!=0 : entries<1) ||
+        categories!=entries || statuses!=entries || whys!=entries || files!=entries ||
+        commits!=entries || impacts!=entries || verifications!=entries ||
+        heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 ||
+        uncommitted!=1 || safe_points!=1) exit 1
+  }
+' checkpoint="$(awk '/^last_commit: / {print $2}' "$recap")" "$recap" || fail 'required sections or work-entry fields missing'
 if LC_ALL=C awk '
   function placeholder(value, quote, tail) {
     if (value ~ /^[`"\047]/) {
@@ -155,6 +163,31 @@ if LC_ALL=C awk '
 ' "$recap"; then
   fail 'possible secret value'
 fi
+if [[ $(awk '/^last_commit: / {print $2}' "$recap") == none ]]; then
+  branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
+  grep -Fx -- '- **Committed range:** No commits yet; this Git repository has no committed history.' "$recap" >/dev/null ||
+    fail 'empty recap must disclose no committed history'
+  grep -Fx -- "- **HEAD:** No commits yet on \`$branch\`" "$recap" >/dev/null ||
+    fail 'empty Current Point HEAD disagrees with Git'
+  grep -Fx -- '- **Recap checkpoint:** None (no commits yet)' "$recap" >/dev/null ||
+    fail 'empty Current Point must not invent a checkpoint'
+  grep -Fx -- '- **Pending committed history:** None' "$recap" >/dev/null ||
+    fail 'empty history cannot have pending commits'
+  grep -Fx -- '- **Committed work:** None; no commits exist.' "$recap" >/dev/null ||
+    fail 'empty recap must not claim committed work'
+  if [[ -n $selected ]]; then
+    [[ -f $selected && ! -s $selected ]] || fail 'empty history cannot select commits'
+    [[ $source_recap == INITIAL || -f $source_recap ]] || fail 'original recap missing'
+    if [[ $source_recap != INITIAL ]]; then
+      bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" none >/dev/null ||
+        fail 'original recap boundary unsafe'
+      cmp -s <(sed '/^## Current Point/,$d' "$source_recap") <(sed '/^## Current Point/,$d' "$recap") ||
+        fail 'previous recap scope changed'
+    fi
+  fi
+  printf 'recap valid: %s\n' "$recap"
+  exit 0
+fi
 if [[ -n $selected ]]; then
   [[ -f $selected ]] || fail 'commit list missing'
   # Selected full IDs must occur exactly once in dated entries, inside their
@@ -192,7 +225,21 @@ if [[ -n $selected ]]; then
   checkpoint=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$recap")
   [[ -z $last || $last == "$checkpoint" ]] || fail 'checkpoint does not match final selected commit'
   head=$(git -C "$repo" rev-parse HEAD)
-  if [[ $source_recap == INITIAL ]]; then
+  empty_source=no
+  if [[ $source_recap != INITIAL && -f $source_recap &&
+        $(awk '/^last_commit: / {print $2}' "$source_recap") == none ]]; then
+    empty_source=yes
+    bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" --from-empty >/dev/null ||
+      fail 'original empty recap boundary unsafe'
+    prior_date=$(awk '/^last_updated: / {print $2}' "$source_recap")
+    prior_work=$(awk '/^- \*\*Uncommitted work:\*\* / {print substr($0,25)}' "$source_recap")
+    [[ $(awk '/^- \*\*Uncommitted work:\*\* / {n++} END {print n+0}' "$source_recap") == 1 &&
+       -n $prior_work ]] || fail 'original empty recap lacks uncommitted-work context'
+    prior_branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
+    grep -Fx -- "- **Before first commit:** $prior_date on \`$prior_branch\`: no commits existed; earlier uncommitted work: $prior_work" "$recap" >/dev/null ||
+      fail 'initial recap dropped previous empty-state work'
+  fi
+  if [[ $source_recap == INITIAL || $empty_source == yes ]]; then
     expected_ids="$fixture_expected_initial"
     git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
       awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}' > "$expected_ids"

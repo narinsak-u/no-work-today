@@ -55,3 +55,38 @@ For an adopted legacy recap, count only the unchanged old dated entries and comp
 If a signed prior checkpoint is stale after a rewrite, continue only from the unique documented `recovery_boundary` reported by `validate-checkpoint.sh ... --recover`. Preserve the earlier Scope and dated entries byte-for-byte, explicitly mark orphaned entries as historical in the new entry and Current Point, and list only still-unrepresented commits from the new graph. If the helper cannot prove the boundary, publish nothing and explain why manual review is needed.
 
 For readability, group repetitive numbered records in chronological groups of at most 10 commits. Keep each hash-and-note pair on the same physical **Commits:** line; never wrap it onto continuation lines.
+
+For a Git repository with no commits, use this shorter variant instead of a dated work entry. Replace `<branch>`, repository/worktree, working-tree details, date, and fingerprint with observed values; there are no commit IDs or checkpoint. The lines naming empty committed history and the empty `Current Point` must remain literal. Never use this variant on a detached HEAD, shallow repository, or unborn branch alongside existing history on other refs.
+
+```markdown
+# Project Recap
+
+## Scope
+
+- **Repository / worktree:** <repository and worktree>
+- **Branch:** `<branch>`
+- **Committed range:** No commits yet; this Git repository has no committed history.
+- **Working-tree inclusion:** Uncommitted work is reported separately, not as completed commits.
+- **Context consulted:** <optional overview/backlog or None found>
+
+## Current Point
+
+- **HEAD:** No commits yet on `<branch>`
+- **Recap checkpoint:** None (no commits yet)
+- **Pending committed history:** None
+- **Committed work:** None; no commits exist.
+- **Uncommitted work:** <describe staged, unstaged, and untracked files; include the recap output>
+- **Verification:** <observed checks or not run>
+- **Next safe point:** <evidence-backed starting action>
+
+<!-- recap-state
+branch: <branch>
+last_commit: none
+last_updated: YYYY-MM-DD
+history_head: none
+pending_commits: none
+output_sha256: <64 lowercase hexadecimal characters>
+-->
+```
+
+Create an empty selected-IDs file and validate with `validate-recap.sh REPOSITORY RECAP SELECTED_IDS none INITIAL` before first publication. Revalidation also accepts the standard two-argument form. The complete fingerprint rules above still apply.

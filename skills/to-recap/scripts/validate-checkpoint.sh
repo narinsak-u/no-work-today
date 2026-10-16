@@ -19,8 +19,14 @@ fail() { echo "unsafe recap checkpoint: $*" >&2; exit 1; }
 [[ -f $recap ]] || fail 'recap does not exist'
 git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail 'not a Git worktree'
 [[ $(git -C "$repo" rev-parse --is-shallow-repository) == false ]] || fail 'shallow history'
-branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'detached or unborn HEAD'
-head=$(git -C "$repo" rev-parse --verify HEAD^{commit} 2>/dev/null) || fail 'no commits'
+branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'detached HEAD'
+head=$(git -C "$repo" rev-parse --verify HEAD^{commit} 2>/dev/null) || {
+  git -C "$repo" show-ref --verify --quiet "refs/heads/$branch" &&
+    fail 'invalid HEAD commit'
+  [[ -z $(git -C "$repo" rev-list --all --max-count=1) ]] ||
+    fail 'unborn branch with existing history'
+  head=none
+}
 [[ -z $expected_head || $expected_head == "$head" ]] || fail 'HEAD changed'
 # Require one final, well-formed state block and its fingerprint immediately
 # before the closing delimiter. Do not normalize any of the hashed bytes.
@@ -44,6 +50,38 @@ fi
 saved_branch=$(awk '/^branch: / {sub(/\r$/, ""); print substr($0,9)}' "$recap")
 [[ $saved_branch == "$branch" ]] || fail 'branch mismatch; preserve existing entries'
 checkpoint=$(awk '/^last_commit: / {sub(/\r$/, ""); print $2}' "$recap")
+if [[ $mode == --from-empty ]]; then
+  [[ $head != none && $checkpoint == none ]] ||
+    fail 'empty-origin transition requires a committed HEAD and no prior checkpoint'
+  [[ $(awk '/^history_head: / {n++} END {print n+0}' "$recap") == 1 &&
+     $(awk '/^history_head: / {print $2}' "$recap") == none &&
+     $(awk '/^pending_commits: / {print $2}' "$recap") == none ]] ||
+    fail 'empty-origin transition requires no prior history or pending commits'
+  grep -Fx -- '- **Committed range:** No commits yet; this Git repository has no committed history.' "$recap" >/dev/null ||
+    fail 'empty-origin recap lacks its no-commit scope'
+  grep -Fx -- "- **HEAD:** No commits yet on \`$branch\`" "$recap" >/dev/null ||
+    fail 'empty-origin recap has an inconsistent branch'
+  grep -Fx -- '- **Recap checkpoint:** None (no commits yet)' "$recap" >/dev/null ||
+    fail 'empty-origin recap has an inconsistent checkpoint'
+  grep -Fx -- '- **Pending committed history:** None' "$recap" >/dev/null ||
+    fail 'empty-origin recap has pending commits'
+  grep -Fx -- '- **Committed work:** None; no commits exist.' "$recap" >/dev/null ||
+    fail 'empty-origin recap claims completed work'
+  if grep -Eq '^## [0-9]{4}-[0-9]{2}-[0-9]{2} |^- \*\*Commits:\*\* |^legacy_prefix: ' "$recap"; then
+    fail 'empty-origin recap contains committed history'
+  fi
+  printf 'branch: %s\nhead: %s\ncheckpoint: none\n' "$branch" "$head"
+  exit 0
+fi
+if [[ $head == none ]]; then
+  [[ $checkpoint == none ]] || fail 'empty history cannot have a recap checkpoint'
+  [[ $(awk '/^history_head: / {n++} END {print n+0}' "$recap") == 1 &&
+     $(awk '/^history_head: / {print $2}' "$recap") == none &&
+     $(awk '/^pending_commits: / {print $2}' "$recap") == none ]] ||
+    fail 'empty history requires no history head or pending commits'
+  printf 'branch: %s\nhead: none\ncheckpoint: none\n' "$branch"
+  exit 0
+fi
 [[ $checkpoint =~ ^[0-9a-f]{40,64}$ ]] || fail 'invalid checkpoint ID'
 [[ $(git -C "$repo" rev-parse --verify "$checkpoint^{commit}" 2>/dev/null || :) == "$checkpoint" ]] || fail 'checkpoint missing or rewritten'
 if [[ -z $recover ]]; then

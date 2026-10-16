@@ -721,9 +721,144 @@ fi
 [[ "$(git -C "$repo" hash-object "$recap")" == "$before" ]] || exit 1
 
 mkdir -p "$fixture/not git" "$fixture/empty"
+mkdir -p "$fixture/agent skills"
+cp -R "$skill" "$fixture/agent skills/to-recap"
+empty_skill="$fixture/agent skills/to-recap"
 git -C "$fixture/empty" init -q
-if bash "$skill/scripts/collect-git-context.sh" "$fixture/not git" >/dev/null 2>&1 || bash "$skill/scripts/collect-git-context.sh" "$fixture/empty" >/dev/null 2>&1; then
-  echo 'Collector accepted absent history' >&2; exit 1
+empty_branch="$(git -C "$fixture/empty" symbolic-ref --quiet --short HEAD)"
+if non_git_error="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/not git" 2>&1)"; then
+  echo 'Collector accepted a non-Git directory' >&2; exit 1
+fi
+[[ "$non_git_error" == *'not a Git worktree'* ]] || exit 1
+empty_context="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty")"
+[[ "$empty_context" == *"mode: empty"* && "$empty_context" == *"branch: $empty_branch"* &&
+   "$empty_context" == *"head: none"* && "$empty_context" == *"total: 0"* &&
+   "$empty_context" != *"commit: "* ]] || { printf 'Unsafe empty context: %s\n' "$empty_context" >&2; exit 1; }
+cat > "$fixture/empty-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Repository / worktree:** An empty Git repository.
+- **Branch:** \`$empty_branch\`
+- **Committed range:** No commits yet; this Git repository has no committed history.
+- **Working-tree inclusion:** Uncommitted files, if any, are not completed commits.
+## Current Point
+- **HEAD:** No commits yet on \`$empty_branch\`
+- **Recap checkpoint:** None (no commits yet)
+- **Pending committed history:** None
+- **Committed work:** None; no commits exist.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** Inspect working-tree files, then create the first commit when ready.
+<!-- recap-state
+branch: $empty_branch
+last_commit: none
+last_updated: 2026-10-12
+history_head: none
+pending_commits: none
+-->
+DOC
+sign_empty_candidate() {
+  local digest
+  digest="$( (sha256sum "$fixture/empty-unsigned" 2>/dev/null || shasum -a 256 "$fixture/empty-unsigned") | awk 'NR==1 {print $1}')"
+  awk -v hash="$digest" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/empty-unsigned" > "$fixture/empty-signed"
+}
+sign_empty_candidate
+: > "$fixture/empty-selected"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty-signed" "$fixture/empty-selected" none INITIAL
+mkdir -p "$fixture/empty/docs"
+cp "$fixture/empty-signed" "$fixture/empty/docs/recap.md"
+bash "$empty_skill/scripts/validate-checkpoint.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" none
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" "$fixture/empty-selected" none "$fixture/empty/docs/recap.md"
+cp "$fixture/empty-unsigned" "$fixture/empty-original"
+for bad in \
+  'last_commit: 0000000000000000000000000000000000000000' \
+  'history_head: 0000000000000000000000000000000000000000' \
+  'pending_commits: 0000000000000000000000000000000000000000' \
+  '- **Recap checkpoint:** `0000000000000000000000000000000000000000`'
+do
+  awk -v replacement="$bad" '
+    /^last_commit: none$/ && replacement ~ /^last_commit:/ {print replacement; next}
+    /^history_head: none$/ && replacement ~ /^history_head:/ {print replacement; next}
+    /^pending_commits: none$/ && replacement ~ /^pending_commits:/ {print replacement; next}
+    /^- \*\*Recap checkpoint:\*\*/ && replacement ~ /^- / {print replacement; next}
+    {print}
+  ' "$fixture/empty-original" > "$fixture/empty-unsigned"
+  sign_empty_candidate
+  if bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty-signed" "$fixture/empty-selected" none INITIAL >/dev/null 2>&1; then
+    printf 'Validator accepted fabricated empty-history state: %s\n' "$bad" >&2; exit 1
+  fi
+done
+cp "$fixture/empty-original" "$fixture/empty-unsigned"
+git -C "$fixture/empty" -c user.name=Recap -c user.email=recap@example.test commit --allow-empty -qm first
+if bash "$empty_skill/scripts/validate-checkpoint.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" >/dev/null 2>&1; then
+  echo 'Checkpoint validator treated empty recap as current after a commit' >&2; exit 1
+fi
+first_head="$(git -C "$fixture/empty" rev-parse HEAD)"
+first_context="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty")"
+[[ "$first_context" == *"mode: initial"* && "$first_context" == *"total: 1"* &&
+   "$first_context" == *"commit: $first_head"* ]] || exit 1
+printf '%s\n' "$first_head" > "$fixture/first-selected"
+cat > "$fixture/first-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Repository / worktree:** An empty Git repository.
+- **Branch:** \`$empty_branch\`
+- **Committed range:** Initial window: \`$first_head\` through \`$first_head\`, inclusive.
+- **Older history:** None; all reachable commits covered
+- **Before first commit:** 2026-10-12 on \`$empty_branch\`: no commits existed; earlier uncommitted work: None.
+- **Working-tree inclusion:** Uncommitted files, if any, are not completed commits.
+## 2026-10-12 — First commit
+- **Category:** infrastructure
+- **Status:** Completed
+- **What / why:** The repository now has its first commit.
+<details>
+<summary>Technical details and commit evidence</summary>
+- **Important files:** None; this was an empty commit.
+- **Commits:** \`$first_head\` — first empty commit.
+- **Verification:** not run
+</details>
+- **Impact:** A committed starting point now exists.
+## Current Point
+- **HEAD:** \`$first_head\` on \`$empty_branch\`
+- **Recap checkpoint:** \`$first_head\`
+- **Pending committed history:** None
+- **Committed work:** The first commit is recorded above.
+- **Uncommitted work:** The existing recap remains untracked.
+- **Verification:** not run
+- **Next safe point:** Inspect uncommitted files before the next change.
+<!-- recap-state
+branch: $empty_branch
+last_commit: $first_head
+last_updated: 2026-10-12
+history_head: $first_head
+pending_commits: none
+-->
+DOC
+first_digest="$( (sha256sum "$fixture/first-unsigned" 2>/dev/null || shasum -a 256 "$fixture/first-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$first_digest" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/first-unsigned" > "$fixture/first-signed"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/first-signed" "$fixture/first-selected" "$first_head" "$fixture/empty/docs/recap.md"
+cp "$fixture/empty/docs/recap.md" "$fixture/empty-tampered"
+printf 'unexpected change\n' >> "$fixture/empty-tampered"
+if bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/first-signed" "$fixture/first-selected" "$first_head" "$fixture/empty-tampered" >/dev/null 2>&1; then
+  echo 'Transition accepted an edited empty recap as source' >&2; exit 1
+fi
+cp "$fixture/first-signed" "$fixture/empty/docs/recap.md"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md"
+first_before="$(git -C "$fixture/empty" hash-object "$fixture/empty/docs/recap.md")"
+first_noop="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty" "$first_head" 0 "$first_head")"
+[[ "$first_noop" == *"mode: resume"* && "$first_noop" == *"total: 0"* &&
+   "$first_noop" != *"commit: "* ]] || exit 1
+bash "$empty_skill/scripts/validate-checkpoint.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" "$first_head"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md"
+[[ "$(git -C "$fixture/empty" hash-object "$fixture/empty/docs/recap.md")" == "$first_before" ]] || exit 1
+git -C "$fixture/empty" symbolic-ref HEAD refs/heads/unborn
+if orphan_error="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty" 2>&1)"; then
+  echo 'Collector treated an unborn branch with existing Git history as an empty repository' >&2; exit 1
+fi
+[[ "$orphan_error" == *'unborn branch with existing or unsafe history'* ]] || exit 1
+if bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" >/dev/null 2>&1; then
+  echo 'Validator accepted an empty recap for a branch with existing history' >&2; exit 1
 fi
 # A shallow clone cannot establish an initial oldest-history boundary.
 git clone -q --depth 1 "file://$repo" "$fixture/shallow" 2>/dev/null

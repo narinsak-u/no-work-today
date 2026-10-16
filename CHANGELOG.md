@@ -10,6 +10,7 @@ All notable changes to this repository are documented here. Releases follow sema
 - Required every recap publication, including caught-up updates, to pin `history_head` to captured `HEAD`; preserved the exact pending queue and rejected partial publications without the required continuation boundary.
 - Distinguished the recap helper directory from the target Git root in skill instructions and validator calls.
 - Clarified recap shell-state and helper-root handling, evidence-backed groups of at most ten commits, single-line commit evidence, fail-closed publication, optional Junior notes, and singular/plural pending-history grammar.
+- Added truthful empty-repository recaps and a validated empty-to-first-commit transition that preserves the prior state; subsequent caught-up runs leave the recap unchanged.
 - Fixed the recap shell regression loop under `set -e` when its remaining-commit counter reaches zero.
 - Reworked catchup overviews around ten evidence-based sections, tightened exact ordered-heading validation, and updated the fictional example and regression coverage.
 - Improved catchup Main Flows with concise vertical diagrams and selective Core Modules trees while preserving the ten-heading and safety contracts.
