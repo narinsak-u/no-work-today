@@ -3,6 +3,7 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+- Skip files over the TODO scanner's 512 KiB limit during traversal, avoiding per-file `wc` launches while preserving bounded, redacted scan output.
 - Made catchup overviews more concise with role-described technologies and complete workflow diagrams and endpoint counts.
 - Safely adopt clean tracked legacy recaps by preserving old entries byte-for-byte, validating new entries, and refusing ambiguous or modified history.
 - Kept pending recap queue validation compatible with CRLF documents.
