@@ -35,17 +35,15 @@ fi
 # Candidates are evidence, not backlog items. Keep the scan bounded and never
 # traverse dependency, generated, build, or version-control directories.
 if [[ $# -eq 3 ]]; then
-  printf '%s\0' "$root/$relative"
+  find "$root/$relative" -type f ! -size +524288c -print0
 else
-  find "$root" \( -type d \( -name .git -o -name .worktrees -o -name .hg -o -name .svn -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name out -o -name coverage -o -name .next -o -name .cache -o -name .venv -o -name venv -o -name __pycache__ -o -name .tox -o -name .turbo -o -name .gradle -o -name generated \) -prune \) -o -type f -print0
+  find "$root" \( -type d \( -name .git -o -name .worktrees -o -name .hg -o -name .svn -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name out -o -name coverage -o -name .next -o -name .cache -o -name .venv -o -name venv -o -name __pycache__ -o -name .tox -o -name .turbo -o -name .gradle -o -name generated \) -prune \) -o \( -type f ! -size +524288c -print0 \)
 fi |
 while IFS= read -r -d '' path; do
   relative="${path#"$root"/}"
   case "$relative" in
     docs/backlog.md|.env|.env.*|*/.env|*/.env.*|*credentials*|*secrets*|*.pem|*.key|*.lock|*.min.js|*.map|*.png|*.jpg|*.jpeg|*.gif|*.pdf|*.zip|*.gz|*.jar|*.class|*.wasm|*.exe|*.o|*.a|*.so|*.dylib|*.sqlite|*.db) continue ;;
   esac
-  # Avoid scanning huge files even if they have a source-like extension.
-  [[ "$(wc -c < "$path")" -le 524288 ]] || continue
   # Bash read -d '' stops at a NUL byte; unlike awk, this works with BSD awk
   # where a NUL-format probe can behave like an empty-string match.
   if IFS= read -r -d '' _ < "$path"; then continue; fi

@@ -134,6 +134,14 @@ if ! LC_ALL=C awk '
   function sensitive(source,    lower, rest, value, url, authority, info, at, offset, colon, end) {
     lower = tolower(source)
     rest = lower
+    while (match(rest, /(^|[^[:alnum:]_])authorization[[:space:]]*:[[:space:]]*bearer[[:space:]]+/)) {
+      rest = substr(rest, RSTART + RLENGTH)
+      if (match(rest, /^[^[:space:],;#]+/)) {
+        value = substr(rest, 1, RLENGTH)
+        if (!placeholder(value)) return 1
+        rest = substr(rest, RLENGTH + 1)
+      }
+    }
     while (match(rest, /(^|[^[:alnum:]_])(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|client_secret|token)|aws_secret_access_key)[[:space:]]*[:=][[:space:]]*/)) {
       rest = substr(rest, RSTART + RLENGTH)
       if (match(rest, /^(\[[^]]+\]|"[[^]]+\]"|\047[[^]]+\047)/) || match(rest, /^[^[:space:],;#]+/)) {

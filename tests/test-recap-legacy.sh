@@ -54,6 +54,17 @@ selected="$fixture/selected"
 git -C "$repo" rev-list --topo-order --reverse "$base..$head" > "$selected"
 [[ "$(awk 'END {print NR}' "$selected")" == 2 ]] || exit 1
 bash "$skill/scripts/validate-legacy-recap.sh" "$repo" "$legacy" "$head"
+# A fresh clone ensures this configured fsmonitor command would be exercised.
+fsmonitor_repo="$fixture/legacy fsmonitor project"
+git clone -q "$repo" "$fsmonitor_repo"
+fsmonitor_marker="$fixture/legacy-fsmonitor-invoked"
+fsmonitor="$fixture/legacy-fsmonitor"
+printf '#!/usr/bin/env bash\ntouch %q\nprintf "token\\n"\n' "$fsmonitor_marker" > "$fsmonitor"
+chmod +x "$fsmonitor"
+printf -v fsmonitor_command '%q' "$fsmonitor"
+git -C "$fsmonitor_repo" config core.fsmonitor "$fsmonitor_command"
+FSMONITOR_MARKER="$fsmonitor_marker" bash "$skill/scripts/validate-legacy-recap.sh" "$fsmonitor_repo" "$fsmonitor_repo/docs/recap.md" >/dev/null
+[[ ! -e "$fsmonitor_marker" ]] || { echo 'legacy recap validation invoked configured fsmonitor' >&2; exit 1; }
 
 # The new entry follows today's readable format; the historical entry does not
 # have to be recast into that format. Simulate the agent's draft on a separate path.
