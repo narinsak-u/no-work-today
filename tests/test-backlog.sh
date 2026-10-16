@@ -160,6 +160,15 @@ empty_state="$(bash "$skill/scripts/working-tree.sh" "$root")"
 [[ "$empty_state" == *'BRANCH=fixture'* && "$empty_state" == *'HEAD=none'* ]] || exit 1
 git -C "$root" add src/payments.go
 git -C "$root" -c user.name=Fixture -c user.email=fixture@example.test commit -qm initial
+# A repository-configured fsmonitor command must not run during inspection.
+fsmonitor_marker="$fixture/fsmonitor-invoked"
+fsmonitor="$fixture/fsmonitor"
+printf '#!/usr/bin/env bash\ntouch %q\nprintf "token\\n"\n' "$fsmonitor_marker" > "$fsmonitor"
+chmod +x "$fsmonitor"
+printf -v fsmonitor_command '%q' "$fsmonitor"
+git -C "$root" config core.fsmonitor "$fsmonitor_command"
+FSMONITOR_MARKER="$fsmonitor_marker" bash "$skill/scripts/working-tree.sh" "$root" >/dev/null
+[[ ! -e "$fsmonitor_marker" ]] || { echo 'working-tree inspection invoked configured fsmonitor' >&2; exit 1; }
 # This same repository has numerous low-value TODOs, one concrete capture
 # outcome, and local staged/unstaged changes. The backlog below must not
 # promote noise or infer Done from the local diff.
