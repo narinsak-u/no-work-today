@@ -55,7 +55,7 @@ Run a skill from the root of the target project and ask your agent to use it. Ea
 
 | Skill | Output | What it helps with |
 | --- | --- | --- |
-| `to-catchup` | `docs/overview.md` | Project purpose, architecture, application flow, modules, configuration, workflow, and cautions. |
+| `to-catchup` | `docs/overview.md` | Purpose, active Tech Stack, selective Project Tree and first reading path, verified application workflows, confirmed HTTP endpoints where applicable, project scripts, and safety cautions. |
 | `to-recap` | `docs/recap.md` | Append-only, checkpointed summaries of committed work; initial coverage is at most the latest 100 commits, while later checkpoint ranges are reviewed completely in bounded batches. |
 | `to-backlog` | `docs/backlog.md` | Evidence-backed unfinished work with stable IDs, statuses, priorities, dependencies, and blockers. |
 
