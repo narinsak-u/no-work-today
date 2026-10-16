@@ -101,6 +101,16 @@ fi
 [[ "$overflow" == *'src with spaces/leads file.txt:102: [1 safe TODO lead omitted by per-file 100 candidate limit]'* ]] || exit 1
 [[ "$overflow" == *'src with spaces/leads file.txt:1: [1 sensitive TODO leads suppressed]'* ]] || exit 1
 [[ "$overflow" != *'never-print-this-value'* ]] || exit 1
+# Following the first omitted location scans only that file, from the given
+# line, with the same sensitive-line redaction and per-call bound.
+printf 'TODO: SERVICE_API_KEY=followup-secret\n' >> "$fixture/limits/src with spaces/leads file.txt"
+printf 'TODO: finish payment replay coverage\n' >> "$fixture/limits/src with spaces/leads file.txt"
+followup="$(bash "$skill/scripts/find-todos.sh" "$fixture/limits" 'src with spaces/leads file.txt' 102)"
+[[ "$followup" == *'leads file.txt:102:FIXME: safe lead 100'* && "$followup" == *'leads file.txt:103:'*'sensitive TODO'* && "$followup" == *'leads file.txt:104:TODO: finish payment replay coverage'* ]] || exit 1
+[[ "$followup" != *'followup-secret'* && "$followup" != *'leads file.txt:101:FIXME'* ]] || exit 1
+if bash "$skill/scripts/find-todos.sh" "$fixture/limits" '../my project/notes.txt' 1 > "$fixture/unsafe-scan.out" 2> "$fixture/unsafe-scan.err"; then exit 1; fi
+[[ ! -s "$fixture/unsafe-scan.out" ]] || exit 1
+
 
 # Warnings themselves stay bounded when many files exceed their allowance.
 mkdir -p "$fixture/many limits"
@@ -120,12 +130,45 @@ empty_state="$(bash "$skill/scripts/working-tree.sh" "$root")"
 [[ "$empty_state" == *'BRANCH=fixture'* && "$empty_state" == *'HEAD=none'* ]] || exit 1
 git -C "$root" add src/payments.go
 git -C "$root" -c user.name=Fixture -c user.email=fixture@example.test commit -qm initial
+# This same repository has numerous low-value TODOs, one concrete capture
+# outcome, and local staged/unstaged changes. The backlog below must not
+# promote noise or infer Done from the local diff.
+for number in {1..125}; do printf '// TODO: tweak formatting %d\n' "$number" >> "$root/src/noise.go"; done
+noise_scan="$(bash "$fixture/standalone/to-backlog/scripts/find-todos.sh" "$root")"
+[[ "$noise_scan" == *'src/noise.go:101:'*'safe TODO leads omitted by per-file 100 candidate limit'* ]] || exit 1
+noise_followup="$(bash "$fixture/standalone/to-backlog/scripts/find-todos.sh" "$root" src/noise.go 101)"
+[[ "$noise_followup" == *'src/noise.go:125:// TODO: tweak formatting 125'* ]] || exit 1
 printf 'more\n' >> "$root/src/payments.go"
 git -C "$root" add src/payments.go
 printf 'unstaged\n' >> "$root/src/payments.go"
 printf 'untracked\n' > "$root/src/new-task.txt"
 state="$(bash "$skill/scripts/working-tree.sh" "$root")"
 [[ "$state" == *'BRANCH=fixture'* && "$state" == *'HEAD='* && "$state" == *'STATUS=MM'*'src/payments.go'* && "$state" == *'src/new-task.txt'* ]] || exit 1
+# Stage and edit a path with spaces; staged facts must not swallow unstaged
+# facts, and no working-tree helper invocation changes the index or files.
+printf 'first change\n' >> "$root/src/order file.go"
+git -C "$root" add 'src/order file.go'
+printf 'second change\n' >> "$root/src/order file.go"
+before_index="$(git -C "$root" ls-files -s)"
+before_status="$(git -C "$root" status --porcelain)"
+state="$(bash "$skill/scripts/working-tree.sh" "$root")"
+[[ "$state" == *'STAGED_CHANGED_FILES'*'src/order file.go'* && "$state" == *'UNSTAGED_CHANGED_FILES'*'src/order file.go'* ]] || exit 1
+[[ "$state" == *'STAGED_DIFF_STAT'*'src/order file.go'* && "$state" == *'UNSTAGED_DIFF_STAT'*'src/order file.go'* ]] || exit 1
+[[ "$state" == *'src/payments.go'* && "$state" == *'src/new-task.txt'* ]] || exit 1
+[[ "$(git -C "$root" ls-files -s)" == "$before_index" && "$(git -C "$root" status --porcelain)" == "$before_status" ]] || exit 1
+mkdir -p "$fixture/many changes"
+git -C "$fixture/many changes" init -q
+for number in {01..45}; do printf 'baseline\n' > "$fixture/many changes/file $number.txt"; done
+git -C "$fixture/many changes" add .
+git -C "$fixture/many changes" -c user.name=Fixture -c user.email=fixture@example.test commit -qm baseline
+for number in {01..45}; do
+  printf 'staged\n' >> "$fixture/many changes/file $number.txt"
+  git -C "$fixture/many changes" add "file $number.txt"
+  printf 'unstaged\n' >> "$fixture/many changes/file $number.txt"
+done
+many_changes="$(bash "$skill/scripts/working-tree.sh" "$fixture/many changes")"
+[[ "$many_changes" == *'additional staged changed files omitted'* && "$many_changes" == *'additional unstaged changed files omitted'* ]] || exit 1
+[[ "$many_changes" == *'STAGED_DIFF_STAT'* && "$many_changes" == *'UNSTAGED_DIFF_STAT'* ]] || exit 1
 
 cat > "$root/docs/backlog.md" <<'DOC'
 # Project Backlog
@@ -189,6 +232,9 @@ cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 bash "$fixture/standalone/to-backlog/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 cmp -s "$fixture/valid.md" "$root/docs/backlog.md"
+[[ "$(grep -c '^### BL-' "$root/docs/backlog.md")" -eq 2 ]] || exit 1
+[[ "$(grep -c '^\- \*\*Status:\*\* Done$' "$root/docs/backlog.md")" -eq 1 ]] || exit 1
+[[ "$(< "$root/docs/backlog.md")" == *'### BL-002 — Improve capture'*'- **Status:** Todo'* ]] || exit 1
 
 reject() {
   if bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md" > /dev/null 2> "$fixture/validation.stderr"; then
