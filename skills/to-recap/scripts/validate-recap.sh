@@ -17,13 +17,71 @@ trap 'rm -rf "$expected_dir"' EXIT
 fixture_expected_initial="$expected_dir/initial"
 fixture_expected_history="$expected_dir/history"
 fixture_expected_batch="$expected_dir/batch"
+legacy_prior=0
+old_prefix_lines=0
+if [[ -n $source_recap && $source_recap != INITIAL && -f $source_recap ]] &&
+   ! grep -q '^output_sha256:' "$source_recap"; then
+  bash "$(dirname "$0")/validate-legacy-recap.sh" "$repo" "$source_recap" "$expected_head" >/dev/null ||
+    fail 'unsafe legacy source; preserve existing recap'
+  legacy_prior=1
+fi
 bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$recap" "$expected_head" >/dev/null || fail 'unsafe state or checkpoint'
-awk '
+# The marker is written only on adoption and carried forward unchanged. It
+# identifies exactly which old entries retain their original bytes and shape.
+legacy_marker=$(awk '{sub(/\r$/, "")} /^legacy_prefix: / {print substr($0,16)}' "$recap")
+if grep -q '^legacy_prefix:' "$recap" && [[ -z $legacy_marker ]]; then
+  fail 'invalid legacy prefix marker'
+fi
+if [[ -n $legacy_marker ]]; then
+  [[ $legacy_marker =~ ^[1-9][0-9]*\ [0-9a-f]{64}$ ]] || fail 'invalid legacy prefix marker'
+  [[ $(awk '
+    {sub(/\r$/, "")}
+    /^<!-- recap-state$/ {inside=1}
+    /^-->$/ {inside=0}
+    /^legacy_prefix:/ {n++; if (!inside) bad=1}
+    END {print n+0, bad+0}
+  ' "$recap") == '1 0' ]] || fail 'duplicate or misplaced legacy prefix marker'
+  legacy_count=${legacy_marker%% *}
+  old_prefix_lines=$(awk -v total="$legacy_count" '
+    {sub(/\r$/, "")}
+    /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {
+      if (++n>total) {print NR-1; found=1; exit}
+    }
+    /^## Current Point$/ {if (n==total) {print NR-1; found=1}; exit}
+    END {if (!found) exit 1}
+  ' "$recap") || fail 'legacy entry boundary missing'
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual_prefix=$(sed -n "1,${old_prefix_lines}p" "$recap" | sha256sum | awk '{print $1}')
+  else
+    actual_prefix=$(sed -n "1,${old_prefix_lines}p" "$recap" | shasum -a 256 | awk '{print $1}')
+  fi
+  [[ $legacy_marker == "$legacy_count $actual_prefix" ]] || fail 'legacy entries changed'
+elif (( legacy_prior )); then
+  fail 'adopted legacy recap lacks preservation marker'
+fi
+if [[ $source_recap == INITIAL && -n $legacy_marker ]]; then
+  fail 'initial recap cannot have legacy entries'
+fi
+if [[ -n $source_recap && $source_recap != INITIAL && ! -f $source_recap ]]; then
+  fail 'original recap missing'
+fi
+if [[ -n $source_recap && $source_recap != INITIAL && -f $source_recap && $legacy_prior == 0 ]]; then
+  prior_marker=$(awk '{sub(/\r$/, "")} /^legacy_prefix: / {print substr($0,16)}' "$source_recap")
+  [[ $legacy_marker == "$prior_marker" ]] || fail 'legacy boundary changed'
+fi
+if (( legacy_prior )); then
+  source_count=$(awk '/^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {n++} END {print n+0}' "$source_recap")
+  [[ $legacy_count == "$source_count" ]] || fail 'legacy entry count changed'
+fi
+awk -v old_prefix_lines="$old_prefix_lines" '
   {sub(/\r$/, "")}
   /^# Project Recap$/ {title++}
   /^## Scope$/ {scope++}
   /^## Current Point$/ {current++; in_entry=0}
-  /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {entries++; in_entry=1; entry_notes=0}
+  /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {
+    if (NR > old_prefix_lines) {entries++; in_entry=1; entry_notes=0}
+    else in_entry=0
+  }
   in_entry && /^- \*\*Category:\*\* / {categories++;
     if ($0 !~ /^- \*\*Category:\*\* (features|fixes|refactors|infrastructure|testing|documentation|security|performance)$/) invalid=1}
   in_entry && /^- \*\*Status:\*\* / {statuses++;
@@ -162,13 +220,24 @@ if [[ -n $selected ]]; then
     pending=no
   else
     [[ -f $source_recap ]] || fail 'original recap missing'
-    if grep -q '^output_sha256: ' "$source_recap"; then
+    if grep -q '^output_sha256:' "$source_recap"; then
       bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" >/dev/null ||
         fail 'original recap boundary unsafe'
     fi
     prefix_bytes=$(sed '/^## Current Point/,$d' "$source_recap" | wc -c)
     cmp -s -n "$prefix_bytes" <(sed '/^## Current Point/,$d' "$source_recap") <(sed '/^## Current Point/,$d' "$recap") ||
       fail 'previous recap entries changed'
+    if (( legacy_prior )); then
+      # Old entries keep their bytes and may predate the collapsed-details
+      # format. They must not already claim any newly selected commit.
+      awk '
+        FILENAME==ARGV[1] {want[$0]=1; next}
+        /^## Current Point$/ {exit}
+        /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {entry=1}
+        entry {for (id in want) if (index($0, id)) repeated=1}
+        END {exit !repeated}
+      ' "$selected" "$source_recap" && fail 'selected commit already represented in legacy entries'
+    fi
     base=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$source_recap")
     [[ $base =~ ^[0-9a-f]{40,64}$ ]] &&
       git -C "$repo" merge-base --is-ancestor "$base" "$head" ||
