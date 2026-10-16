@@ -4,6 +4,80 @@ set -euo pipefail
 skill="$(cd "$(dirname "$0")/../skills/to-catchup" && pwd)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/memory skill tests.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
+assert_role_described_stack() {
+  local file="$1"
+  awk '
+    /^## Tech Stack$/ { in_stack = 1; next }
+    /^## / && in_stack { exit }
+    in_stack && NF {
+      if ($0 !~ /^- \*\*[^*]+\*\*: .+\.$/) exit 1
+      found = 1
+    }
+    END { if (!found) exit 1 }
+  ' "$file" || { printf 'Tech Stack entries must be concise role-described names: %s\n' "$file" >&2; return 1; }
+}
+
+assert_workflow_diagrams_complete() {
+  local file="$1" workflows diagrams blocks arrows
+  workflows="$(awk '
+    /^\| Workflow \| Purpose \|$/ { in_table = 1; next }
+    /^###/ && in_table { exit }
+    in_table && /^\| [^ -]/ { count++ }
+    END { print count + 0 }
+  ' "$file")"
+  diagrams="$(awk '
+    /^## Workflow$/ { in_workflow = 1; next }
+    /^## / && in_workflow { exit }
+    in_workflow && /^###/ { count++ }
+    END { print count + 0 }
+  ' "$file")"
+  blocks="$(awk '
+    /^## Workflow$/ { in_workflow = 1; next }
+    /^## / && in_workflow { exit }
+    in_workflow && /^```text$/ { count++ }
+    END { print count + 0 }
+  ' "$file")"
+  arrows="$(awk '
+    /^## Workflow$/ { in_workflow = 1; next }
+    /^## / && in_workflow { exit }
+    in_workflow && /^  ↓$/ { count++ }
+    END { print count + 0 }
+  ' "$file")"
+  if [[ "$workflows" -eq 0 || "$workflows" -ne "$diagrams" ||
+        "$diagrams" -ne "$blocks" || "$arrows" -lt "$blocks" ]]; then
+    printf 'Workflow inventory/diagram mismatch in %s: %s names, %s headings, %s diagrams, %s vertical arrows\n' \
+      "$file" "$workflows" "$diagrams" "$blocks" "$arrows" >&2
+    return 1
+  fi
+}
+
+assert_endpoint_count() {
+  local file="$1" expected="$2" actual
+  actual="$(awk '
+    /^## API Endpoints$/ { in_api = 1; next }
+    /^## / && in_api { exit }
+    in_api && /^\| (GET|POST|PATCH|PUT|DELETE|HEAD|OPTIONS) \|/ { count++ }
+    END { print count + 0 }
+  ' "$file")"
+  if [[ "$actual" -ne "$expected" ]] ||
+    ! grep -Eq "^\\*\\*(Complete|Partial) — $expected (confirmed|fictional|registered) HTTP endpoints?" "$file"; then
+    printf 'Endpoint inventory mismatch in %s: expected %s rows, found %s\n' "$file" "$expected" "$actual" >&2
+    return 1
+  fi
+}
+
+assert_complete_workflow_count() {
+  local file="$1" expected="$2" actual
+  actual="$(awk '
+    /^\| Workflow \| Purpose \|$/ { in_table = 1; next }
+    /^###/ && in_table { exit }
+    in_table && /^\| [^ -]/ { count++ }
+    END { print count + 0 }
+  ' "$file")"
+  [[ "$actual" -eq "$expected" ]] &&
+    grep -Fq "**Complete — $expected" "$file"
+}
+
 mkdir -p "$fixture/my project/src" "$fixture/my project/apps/web" "$fixture/my project/node_modules" "$fixture/my project/dist" "$fixture/my project/target" "$fixture/my project/docs"
 printf '{"dependencies":{"next":"14.0.0","react":"18.0.0"}}\n' > "$fixture/my project/package.json"
 printf 'fn main() {}\n' > "$fixture/my project/src/main.rs"
@@ -50,7 +124,7 @@ cat > "$fixture/my project/docs/overview.md" <<'DOC'
 ## Purpose
 A fictional account service helps team members manage access (`README.md`).
 ## Tech Stack
-Rust is used by the account service (`src/main.rs`); the fixture manifest also declares Next.js for the browser client.
+- **Rust**: Runs the account service (`src/main.rs`).
 ## Project Tree
 ```text
 src/main.rs       service startup and mounted routes
@@ -86,7 +160,12 @@ Return account
 - Authentication boundary: verify before changing protected handlers.
 - Unknown: deployment behavior; inspect deployment configuration.
 DOC
+! grep -Fq 'React' "$fixture/my project/docs/overview.md"
+! grep -Fq 'Next.js' "$fixture/my project/docs/overview.md"
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
+assert_role_described_stack "$fixture/my project/docs/overview.md"
+assert_workflow_diagrams_complete "$fixture/my project/docs/overview.md"
+assert_endpoint_count "$fixture/my project/docs/overview.md" 2
 [[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 7 ]] || exit 1
 grep -Fq 'Read `README.md` first' "$fixture/my project/docs/overview.md"
 grep -Fq 'Partial — 2 confirmed HTTP endpoints' "$fixture/my project/docs/overview.md"
@@ -96,7 +175,8 @@ cat > "$fixture/my project/docs/overview.md" <<'DOC'
 ## Purpose
 A fictional service.
 ## Tech Stack
-Node.js with an HTTP framework (fixture evidence).
+- **Node.js**: Runs the HTTP service.
+- **Express**: Handles HTTP requests.
 ## Project Tree
 ```text
 src/ service implementation
@@ -128,6 +208,9 @@ Response
 ## Important Notes
 - Use `DATABASE_URL=[REDACTED]` in examples; never copy a live connection string.
 DOC
+assert_role_described_stack "$fixture/my project/docs/overview.md"
+assert_workflow_diagrams_complete "$fixture/my project/docs/overview.md"
+assert_endpoint_count "$fixture/my project/docs/overview.md" 1
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
 
 mkdir -p "$fixture/client/docs"
@@ -136,7 +219,9 @@ cat > "$fixture/client/docs/overview.md" <<'DOC'
 ## Purpose
 A fictional browser client for finding notes.
 ## Tech Stack
-TypeScript, React, and Vite.
+- **TypeScript**: Adds types to the browser application.
+- **React**: Builds the browser interface.
+- **Vite**: Runs the local development server.
 ## Project Tree
 src/ browser application; begin at `src/main.ts`, then read `src/search.ts`.
 ## Workflow
@@ -160,6 +245,8 @@ Render notes
 - The API implementation lives in another repository; server routes are not available here.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/client/docs/overview.md"
+assert_role_described_stack "$fixture/client/docs/overview.md"
+assert_workflow_diagrams_complete "$fixture/client/docs/overview.md"
 [[ "$(grep -c '^## ' "$fixture/client/docs/overview.md")" -eq 6 ]] || exit 1
 ! grep -Fq '## API Endpoints' "$fixture/client/docs/overview.md"
 grep -Fq 'changes the database; confirm the target database before running' "$fixture/my project/docs/overview.md"
@@ -278,6 +365,12 @@ printf '<!-- skill-state\noutput_sha256: %s\n-->' "$digest" >> "$fixture/no-fina
 bash "$skill/scripts/validate-overview.sh" "$fixture/no-final-lf.md"
 # The published fictional example and generated-fixture shape share this validator.
 bash "$skill/scripts/validate-overview.sh" "$skill/../../examples/overview.md"
+assert_role_described_stack "$skill/../../examples/overview.md"
+assert_workflow_diagrams_complete "$skill/../../examples/overview.md"
+assert_complete_workflow_count "$skill/../../examples/overview.md" 5
+assert_endpoint_count "$skill/../../examples/overview.md" 7
+grep -Fq '**Complete — 5 fictional workflows (illustrative scenario only).' "$skill/../../examples/overview.md"
+grep -Fq '**Complete — 7 fictional HTTP endpoints (illustrative scenario only).' "$skill/../../examples/overview.md"
 for helper in "$skill"/scripts/*.sh; do
   bash -n "$helper"
 done
@@ -334,7 +427,8 @@ cat > "$project/docs/overview.md" <<'DOC'
 ## Purpose
 The Notes API lets team members save and read their private notes (`README.md`).
 ## Tech Stack
-Node.js runs the CommonJS service; Express registers HTTP routes (`src/server.js`, `package.json`).
+- **Node.js**: Runs the service.
+- **Express**: Registers HTTP routes (`src/server.js`, `package.json`).
 ## Project Tree
 ```text
 README.md       purpose and safety guidance
@@ -389,6 +483,10 @@ digest="$(LC_ALL=C sed '/^output_sha256: /d' "$project/docs/overview.md" | (sha2
 awk -v digest="$digest" '{sub(/output_sha256: FINGERPRINT/, "output_sha256: " digest); print}' "$project/docs/overview.md" > "$project/docs/signed.md"
 mv "$project/docs/signed.md" "$project/docs/overview.md"
 bash "$installed_skill/scripts/validate-overview.sh" "$project/docs/overview.md"
+assert_role_described_stack "$project/docs/overview.md"
+assert_workflow_diagrams_complete "$project/docs/overview.md"
+assert_complete_workflow_count "$project/docs/overview.md" 2
+assert_endpoint_count "$project/docs/overview.md" 3
 grep -Fq 'Start with `README.md`' "$project/docs/overview.md"
 grep -Fq 'Needs verification' "$project/docs/overview.md"
 [[ "$(find "$project/docs" -type f | wc -l | tr -d ' ')" -eq 1 ]] || exit 1
