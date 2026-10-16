@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD]
+# Usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD [--recover|--from-empty]]
+# --recover proves a documented boundary for a stale, fully represented
+# history head. Without it, stale checkpoints always fail closed.
+# --from-empty is reserved for signed no-commit source validation.
 # This validator never modifies the recap, its repository, or Git history.
-if (( $# < 2 || $# > 3 )); then
-  echo 'usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD]' >&2; exit 2
+if (( $# < 2 || $# > 4 )) || { (( $# == 4 )) && [[ $4 != --recover && $4 != --from-empty ]]; }; then
+  echo 'usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD [--recover|--from-empty]]' >&2; exit 2
 fi
 repo=$1
 recap=$2
 expected_head=${3:-}
+mode=${4:-}
+recover=''
+[[ $mode != --recover ]] || recover=1
 fail() { echo "unsafe recap checkpoint: $*" >&2; exit 1; }
 [[ -f $recap ]] || fail 'recap does not exist'
 git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail 'not a Git worktree'
@@ -40,12 +46,16 @@ saved_branch=$(awk '/^branch: / {sub(/\r$/, ""); print substr($0,9)}' "$recap")
 checkpoint=$(awk '/^last_commit: / {sub(/\r$/, ""); print $2}' "$recap")
 [[ $checkpoint =~ ^[0-9a-f]{40,64}$ ]] || fail 'invalid checkpoint ID'
 [[ $(git -C "$repo" rev-parse --verify "$checkpoint^{commit}" 2>/dev/null || :) == "$checkpoint" ]] || fail 'checkpoint missing or rewritten'
-git -C "$repo" merge-base --is-ancestor "$checkpoint" "$head" || fail 'checkpoint not an ancestor of HEAD'
+if [[ -z $recover ]]; then
+  git -C "$repo" merge-base --is-ancestor "$checkpoint" "$head" || fail 'checkpoint not an ancestor of HEAD'
+fi
 if (( $(awk '/^history_head: / {n++} END {print n+0}' "$recap") )); then
   history_head=$(awk '/^history_head: / {sub(/\r$/, ""); print $2}' "$recap")
   [[ $history_head =~ ^[0-9a-f]{40,64}$ ]] || fail 'invalid history head'
   [[ $(git -C "$repo" rev-parse --verify "$history_head^{commit}" 2>/dev/null || :) == "$history_head" ]] || fail 'history head missing'
-  git -C "$repo" merge-base --is-ancestor "$history_head" "$head" || fail 'history head not an ancestor'
+  if git -C "$repo" merge-base --is-ancestor "$checkpoint" "$head"; then
+    git -C "$repo" merge-base --is-ancestor "$history_head" "$head" || fail 'history head not an ancestor'
+  fi
   pending=$(awk '/^pending_commits: / {sub(/\r$/, ""); print substr($0,18)}' "$recap")
   [[ $pending == none || $pending =~ ^[0-9a-f]{40,64}(\ [0-9a-f]{40,64})*$ ]] || fail 'malformed pending queue'
   if [[ $pending != none ]]; then
@@ -57,5 +67,37 @@ if (( $(awk '/^history_head: / {n++} END {print n+0}' "$recap") )); then
       git -C "$repo" merge-base --is-ancestor "$commit" "$history_head" || fail 'pending commit outside history head'
     done
   fi
+fi
+if [[ -n $recover ]] && ! git -C "$repo" merge-base --is-ancestor "$checkpoint" "$head"; then
+  [[ -n ${history_head:-} && $history_head == "$checkpoint" && ${pending:-} == none ]] ||
+    fail 'ambiguous recovery: prior history head or pending queue does not prove completed history'
+  bases=$(git -C "$repo" merge-base --all "$checkpoint" "$head") ||
+    fail 'no shared history for recovery'
+  [[ $bases =~ ^[0-9a-f]{40,64}$ ]] ||
+    fail 'ambiguous recovery: no unique common ancestor'
+  # A merge-base alone says nothing about what the prior recap covered. Both
+  # it and the old checkpoint must occur once in historical commit evidence,
+  # and no already represented commit may survive after the proposed boundary.
+  if ! awk -v base="$bases" -v checkpoint="$checkpoint" '
+    FILENAME==ARGV[1] {reachable[$0]=1; next}
+    /^## / {
+      in_entry=($0 ~ /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] /)
+    }
+    in_entry && /^- \*\*Commits:\*\* / {
+      parts=split($0, tokens, "`")
+      for (i=2; i<parts; i+=2) {
+        id=tokens[i]
+        if (id !~ /^[0-9a-f]+$/ || (length(id)!=40 && length(id)!=64)) continue
+        if (id==base) documented_base++
+        if (id==checkpoint) documented_checkpoint++
+        if (reachable[id]) overlap=1
+      }
+    }
+    END {if (documented_base!=1 || documented_checkpoint!=1 || overlap) exit 1}
+  ' <(git -C "$repo" rev-list "$bases..$head") "$recap"; then
+    fail 'ambiguous recovery: shared ancestor not documented or represented commits overlap new history'
+  fi
+  printf 'branch: %s\nhead: %s\ncheckpoint: %s\nrecovery_boundary: %s\n' "$branch" "$head" "$checkpoint" "$bases"
+  exit 0
 fi
 printf 'branch: %s\nhead: %s\ncheckpoint: %s\n' "$branch" "$head" "$checkpoint"
