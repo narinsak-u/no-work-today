@@ -12,16 +12,13 @@ _Avoid_: current HEAD, latest commit (unless it has been processed)
 A set of at most 100 commits reviewed oldest-to-newest during one recap invocation. If unrepresented history remains, the next invocation resumes at the oldest unrepresented commit. The recap checkpoint advances only through commits represented by the published batch.
 _Avoid_: page (unless referring to Git output pagination)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 ## Skill evaluation
 
 **Skill effectiveness**:
 A skill's demonstrated improvement in task success, safety, and usability compared with completing the same task without that skill. Evaluate it with paired, fresh-context runs on matched tasks.
-=======
-=======
->>>>>>> d910d8d (feat: improve catchup overview inventories)
+
 ## Catchup overview
+
 **Technology stack**:
 The major languages/runtimes, frameworks, data stores, and queues evidenced as actively used by a repository. A declared or transitive dependency alone is not proof of active use.
 
@@ -30,9 +27,5 @@ A verified end-to-end runtime path from trigger to outcome, including relevant c
 _Avoid_: flow (when referring to a documented application workflow)
 
 **API endpoint**:
-One explicitly registered HTTP method and route template; each distinct method-and-path pair counts as a separate endpoint, including different methods on the same path.
+One explicitly registered HTTP method and full mounted route template; each distinct method-and-path pair counts as a separate endpoint, including different methods on the same path.
 _Avoid_: URL (when counting endpoints; a URL alone omits the method)
-<<<<<<< HEAD
->>>>>>> f398d16 (docs: add catchup overview glossary terms)
-=======
->>>>>>> d910d8d (feat: improve catchup overview inventories)
