@@ -161,22 +161,32 @@ if [[ -n $selected ]]; then
       fail 'original checkpoint not an ancestor'
     if grep -q '^history_head: ' "$source_recap"; then
       history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$source_recap")
-      pending_ids=$(awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$source_recap")
-      [[ -n $pending_ids ]] || fail 'original pending queue missing'
-      if [[ $pending_ids == none ]]; then
+      source_queue="$expected_dir/source-queue"
+      awk '/^pending_commits: / {print substr($0,18)}' "$source_recap" |
+        tr ' ' '\n' > "$source_queue"
+      [[ -s $source_queue ]] || fail 'original pending queue missing'
+      if [[ $(awk 'NR==1 {print; exit}' "$source_queue") == none ]]; then
         git -C "$repo" rev-list --topo-order --reverse "$history_head..$head" > "$fixture_expected_history"
       else
-        awk -v pending="$pending_ids" '
-          BEGIN {split(pending, queue, " "); for (i in queue) want[queue[i]]=1}
-          FILENAME==ARGV[1] {want[$0]=1; next}
+        # File-backed membership avoids passing the entire queue as an awk
+        # argument; a topological walk retains pending commits across merges.
+        awk '
+          FILENAME==ARGV[1] || FILENAME==ARGV[2] {want[$0]=1; next}
           want[$0] {print}
-        ' <(git -C "$repo" rev-list "$history_head..$head") <(git -C "$repo" rev-list --topo-order --reverse "$head") > "$fixture_expected_history"
+        ' "$source_queue" <(git -C "$repo" rev-list "$history_head..$head") \
+          <(git -C "$repo" rev-list --topo-order --reverse "$head") > "$fixture_expected_history"
       fi
       expected_full="$fixture_expected_history"
     else
       grep -q '^pending_commits: ' "$source_recap" && fail 'original pending queue lacks history head'
       expected_full="$fixture_expected_history"
       git -C "$repo" rev-list --topo-order --reverse "$base..$head" > "$expected_full"
+    fi
+    if (( selected_count == 0 )); then
+      [[ ! -s $expected_full ]] || fail 'selected history does not cover the oldest pending batch'
+      cmp -s "$recap" "$source_recap" || fail 'caught-up recap must remain unchanged'
+      printf 'recap valid: %s\n' "$recap"
+      exit 0
     fi
     expected_batch="$fixture_expected_batch"
     awk 'NR<=100' "$expected_full" > "$expected_batch"
@@ -189,11 +199,14 @@ if [[ -n $selected ]]; then
       pending=yes
       next_unrepresented=$(awk -v selected="$selected_count" 'NR==selected+1 {print; exit}' "$expected_full")
       draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
-      draft_pending=$(awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$recap")
-      [[ $draft_history_head == "$head" && -n $draft_pending && $draft_pending != none ]] ||
+      draft_queue="$expected_dir/draft-queue"
+      awk '/^pending_commits: / {print substr($0,18)}' "$recap" |
+        tr ' ' '\n' > "$draft_queue"
+      [[ $draft_history_head == "$head" && -s $draft_queue ]] ||
         fail 'remaining history requires pinned pending queue'
-      expected_pending=$(awk -v selected="$selected_count" 'NR>selected {if (n) printf " "; printf "%s", $0; n++} END {if (n) printf "\n"}' "$expected_full")
-      [[ $draft_pending == "$expected_pending" ]] || fail 'pending queue does not match remaining history'
+      awk -v selected="$selected_count" 'NR>selected' "$expected_full" > "$expected_dir/remaining"
+      cmp -s "$draft_queue" "$expected_dir/remaining" ||
+        fail 'pending queue does not match remaining history'
     else
       draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
       [[ $draft_history_head == "$head" ]] || fail 'history head does not match captured HEAD'
