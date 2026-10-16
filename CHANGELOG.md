@@ -3,6 +3,7 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+- Reduced redundant recap Git work by reusing one bounded initial history listing and one changed-file name/status diff for totals and pages.
 - Made catchup overviews more concise with role-described technologies and complete workflow diagrams and endpoint counts.
 - Safely adopt clean tracked legacy recaps by preserving old entries byte-for-byte, validating new entries, and refusing ambiguous or modified history.
 - Kept pending recap queue validation compatible with CRLF documents.
