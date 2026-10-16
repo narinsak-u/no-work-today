@@ -32,6 +32,10 @@ printf '// TODO: rotate DB_PASSWORD=[REDACTED VALUE],production-secret\n' > "$ro
 printf '// TODO: rotate DB_PASSWORD=[REDACTED], fixture_credential\n' > "$root/src/redaction-comma-space.go"
 printf '// TODO: rotate DB_PASSWORD=[REDACTED];actual-secret\n' > "$root/src/redaction-semicolon.go"
 printf '// TODO: use DB_PASSWORD="[REDACTED]" in examples\n' > "$root/src/quoted-placeholder.go"
+printf '// TODO: rotate client_secret = live-client-credential\n' > "$root/src/client-secret.go"
+printf '// TODO: rotate OAUTH_CLIENT_SECRET: "quoted-client-credential"\n' > "$root/src/oauth-client-secret.go"
+printf '// TODO: document client_secret=[REDACTED] in examples\n' > "$root/src/client-placeholder.go"
+printf '// TODO: use OAUTH_CLIENT_SECRET="<redacted>" in examples\n' > "$root/src/quoted-client-placeholder.go"
 cp "$root/src/credential.go" "$fixture/credential-before"
 cp "$root/src/database.go" "$fixture/database-before"
 
@@ -51,7 +55,13 @@ for file in redaction-comma-space.go redaction-semicolon.go; do
 done
 [[ "$candidates" == *'src/quoted-placeholder.go:1:'*'DB_PASSWORD="[REDACTED]"'* ]] || exit 1
 [[ "$candidates" == *'src/config-names.go:1:'*'DB_PASSWORD name'* && "$candidates" == *'src/placeholder.go:1:'*'[REDACTED]'* && "$candidates" == *'src/redacted-value.go:1:'*'[REDACTED VALUE]'* ]] || exit 1
+for file in client-secret.go oauth-client-secret.go; do
+  [[ "$candidates" == *"src/$file:1:"*'sensitive TODO'* ]] || exit 1
+done
+[[ "$candidates" == *'src/client-placeholder.go:1:'*'client_secret=[REDACTED]'* ]] || exit 1
+[[ "$candidates" == *'src/quoted-client-placeholder.go:1:'*'OAUTH_CLIENT_SECRET="<redacted>"'* ]] || exit 1
 [[ "$candidates" != *'top-secret-credential'* && "$candidates" != *'connection-secret'* && "$candidates" != *'mysql://'* && "$candidates" != *'sk_live_12345678x'* && "$candidates" != *'ghp_12345678x'* && "$candidates" != *'github_pat_12345678x'* && "$candidates" != *'still-secret'* && "$candidates" != *'production-secret'* && "$candidates" != *'fixture_credential'* && "$candidates" != *'actual-secret'* ]] || exit 1
+[[ "$candidates" != *'live-client-credential'* && "$candidates" != *'quoted-client-credential'* ]] || exit 1
 cmp -s "$fixture/credential-before" "$root/src/credential.go"
 cmp -s "$fixture/database-before" "$root/src/database.go"
 mkdir -p "$fixture/standalone"
@@ -59,6 +69,8 @@ cp -R "$skill" "$fixture/standalone/to-backlog"
 standalone="$(bash "$fixture/standalone/to-backlog/scripts/find-todos.sh" "$root")"
 [[ "$standalone" == *'src/credential.go:1:'*'sensitive TODO'* && "$standalone" == *'src/payments.go:1:'*'Add retries'* && "$standalone" == *'src/github-pat.go:1:'*'sensitive TODO'* ]] || exit 1
 [[ "$standalone" != *'top-secret-credential'* && "$standalone" != *'sk_live_12345678x'* && "$standalone" != *'ghp_12345678x'* && "$standalone" != *'github_pat_12345678x'* ]] || exit 1
+[[ "$standalone" == *'src/client-secret.go:1:'*'sensitive TODO'* && "$standalone" == *'src/oauth-client-secret.go:1:'*'sensitive TODO'* ]] || exit 1
+[[ "$standalone" != *'live-client-credential'* && "$standalone" != *'quoted-client-credential'* ]] || exit 1
 
 # Suppressed candidates must not occupy the per-file safe-lead allowance.
 mkdir -p "$fixture/budget"
@@ -233,6 +245,8 @@ done
 for key in PASSWORD DB_PASSWORD SERVICE_API_KEY CI_ACCESS_TOKEN APP_SECRET_KEY SESSION_TOKEN AWS_SECRET_ACCESS_KEY; do
   invalid "s|Payment capture failure in src/payments.go.|$key=top-secret-credential|" "credential assignment $key"
 done
+invalid 's|Payment capture failure in src/payments.go.|client_secret=live-client-credential|' 'client secret assignment'
+invalid 's|Payment capture failure in src/payments.go.|OAUTH_CLIENT_SECRET: "quoted-client-credential"|' 'prefixed quoted client secret'
 for scheme in postgres postgresql mysql mongodb mongodb+srv redis rediss amqp amqps http https; do
   invalid "s|Payment capture failure in src/payments.go.|$scheme://service:connection-secret@db.example.test/tasks|" "credential URL $scheme"
 done
@@ -256,6 +270,7 @@ invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD="[REDACTED]"|
 invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD=[REDACTED]; APP_TOKEN=[masked]|' 'separate safe named assignments' accept
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=<redacted> and DB_PASSWORD name|' 'angle-bracket redaction and name' accept
 invalid 's|Payment capture failure in src/payments.go.|Connect to https://service@api.example.test/tasks|' 'URL without password' accept
+invalid 's|Payment capture failure in src/payments.go.|client_secret=[REDACTED] and OAUTH_CLIENT_SECRET="<redacted>"|' 'safe client secret placeholders' accept
 cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 printf 'Backlog shell scenarios passed.\n'
