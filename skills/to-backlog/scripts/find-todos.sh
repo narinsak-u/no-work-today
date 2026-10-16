@@ -3,11 +3,42 @@ set -euo pipefail
 
 root="${1:-.}"
 [[ -d "$root" ]] || { printf 'Not a directory: %s\n' "$root" >&2; exit 1; }
-root="$(cd "$root" && pwd)"
+root="$(cd "$root" && pwd -P)"
+# A reported omission can be followed up one file at a time without bypassing
+# the scanner's redaction, size, or per-invocation output bounds.
+if [[ $# -ne 0 && $# -ne 1 && $# -ne 3 ]]; then
+  printf 'Usage: find-todos.sh ROOT [RELATIVE_FILE START_LINE]\n' >&2
+  exit 1
+fi
+start_line=1
+if [[ $# -eq 3 ]]; then
+  relative="$2"
+  start_line="$3"
+  case "/$relative/" in
+    *'/../'*|*'/./'*|*'//'*) printf 'Invalid relative file\n' >&2; exit 1 ;;
+  esac
+  [[ "$relative" != /* && "$relative" != -* && "$relative" != *$'\n'* && "$relative" != *$'\r'* &&
+     "$start_line" =~ ^[1-9][0-9]*$ && -f "$root/$relative" && ! -L "$root/$relative" ]] ||
+    { printf 'Invalid scan target\n' >&2; exit 1; }
+  physical_parent="$(cd "$(dirname "$root/$relative")" && pwd -P)"
+  case "$physical_parent/" in
+    "$root/"|"$root/"*) ;;
+    *) printf 'Scan target leaves repository\n' >&2; exit 1 ;;
+  esac
+  case "/$relative/" in
+    */.git/*|*/.worktrees/*|*/.hg/*|*/.svn/*|*/node_modules/*|*/vendor/*|*/dist/*|*/build/*|*/target/*|*/out/*|*/coverage/*|*/.next/*|*/.cache/*|*/.venv/*|*/venv/*|*/__pycache__/*|*/.tox/*|*/.turbo/*|*/.gradle/*|*/generated/*)
+      printf 'Excluded scan target\n' >&2; exit 1 ;;
+  esac
+fi
+
 
 # Candidates are evidence, not backlog items. Keep the scan bounded and never
 # traverse dependency, generated, build, or version-control directories.
-find "$root" \( -type d \( -name .git -o -name .worktrees -o -name .hg -o -name .svn -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name out -o -name coverage -o -name .next -o -name .cache -o -name .venv -o -name venv -o -name __pycache__ -o -name .tox -o -name .turbo -o -name .gradle -o -name generated \) -prune \) -o -type f -print0 |
+if [[ $# -eq 3 ]]; then
+  printf '%s\0' "$root/$relative"
+else
+  find "$root" \( -type d \( -name .git -o -name .worktrees -o -name .hg -o -name .svn -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name out -o -name coverage -o -name .next -o -name .cache -o -name .venv -o -name venv -o -name __pycache__ -o -name .tox -o -name .turbo -o -name .gradle -o -name generated \) -prune \) -o -type f -print0
+fi |
 while IFS= read -r -d '' path; do
   relative="${path#"$root"/}"
   case "$relative" in
@@ -18,7 +49,7 @@ while IFS= read -r -d '' path; do
   # Bash read -d '' stops at a NUL byte; unlike awk, this works with BSD awk
   # where a NUL-format probe can behave like an empty-string match.
   if IFS= read -r -d '' _ < "$path"; then continue; fi
-  LC_ALL=C awk -v path="$relative" '
+  LC_ALL=C awk -v path="$relative" -v start_line="$start_line" '
     # Deliberately narrow: recognizable assignments and URL password user-info,
     # not an attempt to infer arbitrary secrets from source code.
     function placeholder(value, quote) {
@@ -73,6 +104,7 @@ while IFS= read -r -d '' path; do
       return 0
     }
     {
+      if (NR < start_line) next
       text = $0
       if (tolower(text) ~ /(^|[^[:alnum:]_])(todo|fixme|hack|xxx|wip)([^[:alnum:]_]|$)/) {
         if (sensitive(text)) {
