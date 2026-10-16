@@ -6,7 +6,8 @@ Use this template for `docs/recap.md`; replace bracketed placeholders with verif
 
 - **Repository / worktree:** [repository and worktree]
 - **Branch:** [branch]
-- **Committed range:** Initial window: [oldest included full commit] through [initial HEAD], inclusive, covering the latest 100 eligible commits at most. [State whether older history exists outside initial coverage; for an inherited recap preserve its verified boundary.]
+- **Committed range:** Initial window: `[oldest included full commit]` through `[initial HEAD]`, inclusive.
+- **Older history:** [Use `Outside initial coverage` when more than 100 commits are reachable; otherwise `None; all reachable commits covered`. Preserve this initial-window claim when appending later batches.]
 - **Working-tree inclusion:** Committed and uncommitted work are reported separately.
 - **Context consulted:** [optional `docs/overview.md` / `docs/backlog.md`, or `None found`]
 

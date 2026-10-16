@@ -56,20 +56,27 @@ if (( $(awk '/^history_head: / {n++} END {print n+0}' "$recap") )); then
   if git -C "$repo" merge-base --is-ancestor "$checkpoint" "$head"; then
     git -C "$repo" merge-base --is-ancestor "$history_head" "$head" || fail 'history head not an ancestor'
   fi
-  pending=$(awk '/^pending_commits: / {sub(/\r$/, ""); print substr($0,18)}' "$recap")
-  [[ $pending == none || $pending =~ ^[0-9a-f]{40,64}(\ [0-9a-f]{40,64})*$ ]] || fail 'malformed pending queue'
-  if [[ $pending != none ]]; then
-    seen=' '
-    for commit in $pending; do
-      [[ $seen != *" $commit "* ]] || fail 'duplicate pending commit'
-      seen+="$commit "
-      [[ $(git -C "$repo" rev-parse --verify "$commit^{commit}" 2>/dev/null || :) == "$commit" ]] || fail 'pending commit missing'
-      git -C "$repo" merge-base --is-ancestor "$commit" "$history_head" || fail 'pending commit outside history head'
-    done
+  queue_file=$(mktemp "${TMPDIR:-/tmp}/recap-pending.XXXXXX")
+  trap 'rm -f "$queue_file"' EXIT
+  # Never pass a document's pending queue through -v or another process
+  # argument: a legitimate long history can exceed the OS per-argument limit.
+  awk '/^pending_commits: / {print substr($0,18)}' "$recap" | tr ' ' '\n' > "$queue_file"
+  awk '
+    $0 == "none" && NR == 1 {empty=1; next}
+    $0 !~ /^[0-9a-f]+$/ || (length($0)!=40 && length($0)!=64) || seen[$0]++ {bad=1}
+    END {if (bad || NR==0 || (empty && NR!=1)) exit 1}
+  ' "$queue_file" || fail 'malformed or duplicate pending queue'
+  if [[ $(awk 'NR==1 {print; exit}' "$queue_file") != none ]]; then
+    # A single walk proves every ID belongs to the pinned history, without
+    # spawning Git once per commit or growing a quadratic shell string.
+    git -C "$repo" rev-list "$history_head" |
+      awk 'NR==FNR {reachable[$0]=1; next} !reachable[$0] {bad=1} END {exit bad}' - "$queue_file" ||
+      fail 'pending commit outside history head'
   fi
 fi
 if [[ -n $recover ]] && ! git -C "$repo" merge-base --is-ancestor "$checkpoint" "$head"; then
-  [[ -n ${history_head:-} && $history_head == "$checkpoint" && ${pending:-} == none ]] ||
+  [[ -n ${history_head:-} && $history_head == "$checkpoint" && -n ${queue_file:-} &&
+     $(awk 'NR==1 {print; exit}' "$queue_file") == none ]] ||
     fail 'ambiguous recovery: prior history head or pending queue does not prove completed history'
   bases=$(git -C "$repo" merge-base --all "$checkpoint" "$head") ||
     fail 'no shared history for recovery'
