@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD]
+# Usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD [--from-empty]]
 # This validator never modifies the recap, its repository, or Git history.
-if (( $# < 2 || $# > 3 )); then
-  echo 'usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD]' >&2; exit 2
+if (( $# < 2 || $# > 4 )) || { (( $# == 4 )) && [[ $4 != --from-empty ]]; }; then
+  echo 'usage: validate-checkpoint.sh REPOSITORY RECAP [EXPECTED_HEAD [--from-empty]]' >&2; exit 2
 fi
 repo=$1
 recap=$2
 expected_head=${3:-}
+mode=${4:-}
 fail() { echo "unsafe recap checkpoint: $*" >&2; exit 1; }
 [[ -f $recap ]] || fail 'recap does not exist'
 git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail 'not a Git worktree'
@@ -44,6 +45,29 @@ fi
 saved_branch=$(awk '/^branch: / {sub(/\r$/, ""); print substr($0,9)}' "$recap")
 [[ $saved_branch == "$branch" ]] || fail 'branch mismatch; preserve existing entries'
 checkpoint=$(awk '/^last_commit: / {sub(/\r$/, ""); print $2}' "$recap")
+if [[ $mode == --from-empty ]]; then
+  [[ $head != none && $checkpoint == none ]] ||
+    fail 'empty-origin transition requires a committed HEAD and no prior checkpoint'
+  [[ $(awk '/^history_head: / {n++} END {print n+0}' "$recap") == 1 &&
+     $(awk '/^history_head: / {print $2}' "$recap") == none &&
+     $(awk '/^pending_commits: / {print $2}' "$recap") == none ]] ||
+    fail 'empty-origin transition requires no prior history or pending commits'
+  grep -Fx -- '- **Committed range:** No commits yet; this Git repository has no committed history.' "$recap" >/dev/null ||
+    fail 'empty-origin recap lacks its no-commit scope'
+  grep -Fx -- "- **HEAD:** No commits yet on \`$branch\`" "$recap" >/dev/null ||
+    fail 'empty-origin recap has an inconsistent branch'
+  grep -Fx -- '- **Recap checkpoint:** None (no commits yet)' "$recap" >/dev/null ||
+    fail 'empty-origin recap has an inconsistent checkpoint'
+  grep -Fx -- '- **Pending committed history:** None' "$recap" >/dev/null ||
+    fail 'empty-origin recap has pending commits'
+  grep -Fx -- '- **Committed work:** None; no commits exist.' "$recap" >/dev/null ||
+    fail 'empty-origin recap claims completed work'
+  if grep -Eq '^## [0-9]{4}-[0-9]{2}-[0-9]{2} |^- \*\*Commits:\*\* |^legacy_prefix: ' "$recap"; then
+    fail 'empty-origin recap contains committed history'
+  fi
+  printf 'branch: %s\nhead: %s\ncheckpoint: none\n' "$branch" "$head"
+  exit 0
+fi
 if [[ $head == none ]]; then
   [[ $checkpoint == none ]] || fail 'empty history cannot have a recap checkpoint'
   [[ $(awk '/^history_head: / {n++} END {print n+0}' "$recap") == 1 &&

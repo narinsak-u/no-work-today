@@ -167,7 +167,21 @@ if [[ -n $selected ]]; then
   checkpoint=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$recap")
   [[ -z $last || $last == "$checkpoint" ]] || fail 'checkpoint does not match final selected commit'
   head=$(git -C "$repo" rev-parse HEAD)
-  if [[ $source_recap == INITIAL ]]; then
+  empty_source=no
+  if [[ $source_recap != INITIAL && -f $source_recap &&
+        $(awk '/^last_commit: / {print $2}' "$source_recap") == none ]]; then
+    empty_source=yes
+    bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" --from-empty >/dev/null ||
+      fail 'original empty recap boundary unsafe'
+    prior_date=$(awk '/^last_updated: / {print $2}' "$source_recap")
+    prior_work=$(awk '/^- \*\*Uncommitted work:\*\* / {print substr($0,25)}' "$source_recap")
+    [[ $(awk '/^- \*\*Uncommitted work:\*\* / {n++} END {print n+0}' "$source_recap") == 1 &&
+       -n $prior_work ]] || fail 'original empty recap lacks uncommitted-work context'
+    prior_branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
+    grep -Fx -- "- **Before first commit:** $prior_date on \`$prior_branch\`: no commits existed; earlier uncommitted work: $prior_work" "$recap" >/dev/null ||
+      fail 'initial recap dropped previous empty-state work'
+  fi
+  if [[ $source_recap == INITIAL || $empty_source == yes ]]; then
     expected_ids="$fixture_expected_initial"
     git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
       awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}' > "$expected_ids"
