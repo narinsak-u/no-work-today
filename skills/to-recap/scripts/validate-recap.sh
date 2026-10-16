@@ -220,9 +220,11 @@ if [[ -n $selected ]]; then
     pending=no
   else
     [[ -f $source_recap ]] || fail 'original recap missing'
+    recovery_boundary=''
     if grep -q '^output_sha256:' "$source_recap"; then
-      bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" >/dev/null ||
+      source_state=$(bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" --recover) ||
         fail 'original recap boundary unsafe'
+      recovery_boundary=$(printf '%s\n' "$source_state" | awk '/^recovery_boundary: / {print $2}')
     fi
     prefix_bytes=$(sed '/^## Current Point/,$d' "$source_recap" | wc -c)
     cmp -s -n "$prefix_bytes" <(sed '/^## Current Point/,$d' "$source_recap") <(sed '/^## Current Point/,$d' "$recap") ||
@@ -239,31 +241,39 @@ if [[ -n $selected ]]; then
       ' "$selected" "$source_recap" && fail 'selected commit already represented in legacy entries'
     fi
     base=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$source_recap")
-    [[ $base =~ ^[0-9a-f]{40,64}$ ]] &&
-      git -C "$repo" merge-base --is-ancestor "$base" "$head" ||
-      fail 'original checkpoint not an ancestor'
-    if grep -q '^history_head: ' "$source_recap"; then
-      history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$source_recap")
-      source_queue="$expected_dir/source-queue"
-      awk '/^pending_commits: / {print substr($0,18)}' "$source_recap" |
-        tr ' ' '\n' > "$source_queue"
-      [[ -s $source_queue ]] || fail 'original pending queue missing'
-      if [[ $(awk 'NR==1 {print; exit}' "$source_queue") == none ]]; then
-        git -C "$repo" rev-list --topo-order --reverse "$history_head..$head" > "$fixture_expected_history"
-      else
-        # File-backed membership avoids passing the entire queue as an awk
-        # argument; a topological walk retains pending commits across merges.
-        awk '
-          FILENAME==ARGV[1] || FILENAME==ARGV[2] {want[$0]=1; next}
-          want[$0] {print}
-        ' "$source_queue" <(git -C "$repo" rev-list "$history_head..$head") \
-          <(git -C "$repo" rev-list --topo-order --reverse "$head") > "$fixture_expected_history"
-      fi
+    if [[ -n $recovery_boundary ]]; then
+      # The source is an authenticated historical record, not an ancestor of
+      # this rewritten graph. Its unique documented common ancestor is the
+      # first safe continuation boundary; leave every old entry byte-for-byte.
+      git -C "$repo" rev-list --topo-order --reverse "$recovery_boundary..$head" > "$fixture_expected_history"
       expected_full="$fixture_expected_history"
+      [[ -s $expected_full ]] || fail 'no new history after recovery boundary'
     else
-      grep -q '^pending_commits: ' "$source_recap" && fail 'original pending queue lacks history head'
-      expected_full="$fixture_expected_history"
-      git -C "$repo" rev-list --topo-order --reverse "$base..$head" > "$expected_full"
+      [[ $base =~ ^[0-9a-f]{40,64}$ ]] &&
+        git -C "$repo" merge-base --is-ancestor "$base" "$head" ||
+        fail 'original checkpoint not an ancestor'
+      if grep -q '^history_head: ' "$source_recap"; then
+        history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$source_recap")
+        source_queue="$expected_dir/source-queue"
+        new_ids="$expected_dir/new-ids"
+        awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$source_recap" |
+          tr ' ' '\n' > "$source_queue"
+        [[ -s $source_queue ]] || fail 'original pending queue missing'
+        git -C "$repo" rev-list "$history_head..$head" > "$new_ids"
+        if [[ $(awk 'NR==1 {print; exit}' "$source_queue") == none ]]; then
+          git -C "$repo" rev-list --topo-order --reverse "$head" |
+            awk 'FILENAME==ARGV[1] {want[$0]=1; next} want[$0] {print}' "$new_ids" - > "$fixture_expected_history"
+        else
+          git -C "$repo" rev-list --topo-order --reverse "$head" |
+            awk 'FILENAME==ARGV[1] || FILENAME==ARGV[2] {want[$0]=1; next} want[$0] {print}' \
+              "$source_queue" "$new_ids" - > "$fixture_expected_history"
+        fi
+        expected_full="$fixture_expected_history"
+      else
+        grep -q '^pending_commits: ' "$source_recap" && fail 'original pending queue lacks history head'
+        expected_full="$fixture_expected_history"
+        git -C "$repo" rev-list --topo-order --reverse "$base..$head" > "$expected_full"
+      fi
     fi
     if (( selected_count == 0 )); then
       [[ ! -s $expected_full ]] || fail 'selected history does not cover the oldest pending batch'
