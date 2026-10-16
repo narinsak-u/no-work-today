@@ -614,7 +614,7 @@ git -C "$account_repo" switch -qc recap-side
 git -C "$account_repo" commit --allow-empty -qm 'side one'
 git -C "$account_repo" commit --allow-empty -qm 'side two'
 git -C "$account_repo" switch -q "$account_branch"
-for ((n=1; n<=3300; n++)); do git -C "$account_repo" commit --allow-empty -qm "long queue $n"; done
+for ((n=1; n<=6600; n++)); do git -C "$account_repo" commit --allow-empty -qm "long queue $n"; done
 git -C "$account_repo" merge -q --no-ff recap-side -m 'join side history'
 long_head="$(git -C "$account_repo" rev-parse HEAD)"
 long_expected="$fixture/long-expected"
@@ -660,8 +660,8 @@ while (( long_offset < long_total )); do
   long_draft="$fixture/long-draft"
   awk -v hash="$long_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$long_unsigned" > "$long_draft"
   if ((long_offset == 0)); then
-    [[ "$(awk '/^pending_commits: / {print length($0)}' "$long_draft")" -gt 131072 ]] ||
-      { echo 'Large queue fixture is shorter than a Linux single-argument limit' >&2; exit 1; }
+    [[ "$(awk '/^pending_commits: / {print length($0)}' "$long_draft")" -gt 262144 ]] ||
+      { echo 'Large queue fixture is shorter than a typical single-argument limit' >&2; exit 1; }
     awk '/^pending_commits: / {sub(/ [0-9a-f]+$/, ""); print; next} !/^output_sha256: / {print}' "$long_draft" > "$fixture/long-bad-unsigned"
     bad_hash="$( (sha256sum "$fixture/long-bad-unsigned" 2>/dev/null || shasum -a 256 "$fixture/long-bad-unsigned") | awk 'NR==1 {print $1}')"
     awk -v hash="$bad_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/long-bad-unsigned" > "$fixture/long-bad-draft"
