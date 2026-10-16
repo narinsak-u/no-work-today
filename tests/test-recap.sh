@@ -607,6 +607,82 @@ if ! bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_no_notes"
   echo 'Validator rejected a recap without optional Junior notes' >&2; exit 1
 fi
 
+# Resume a queue longer than a single process argument, including commits
+# hidden behind a merge after the checkpoint. Every publication is validated
+# before replacing the source; a bad remainder must leave it untouched.
+git -C "$account_repo" switch -qc recap-side
+git -C "$account_repo" commit --allow-empty -qm 'side one'
+git -C "$account_repo" commit --allow-empty -qm 'side two'
+git -C "$account_repo" switch -q "$account_branch"
+for ((n=1; n<=6600; n++)); do git -C "$account_repo" commit --allow-empty -qm "long queue $n"; done
+git -C "$account_repo" merge -q --no-ff recap-side -m 'join side history'
+long_head="$(git -C "$account_repo" rev-parse HEAD)"
+long_expected="$fixture/long-expected"
+long_actual="$fixture/long-actual"
+git -C "$account_repo" rev-list --topo-order --reverse "$account_base..$long_head" > "$long_expected"
+: > "$long_actual"
+cp "$account_legacy_prior" "$account_prior"
+long_prior="$account_prior"
+long_original="$(git -C "$account_repo" hash-object "$long_prior")"
+long_offset=0
+long_total="$(awk 'END {print NR}' "$long_expected")"
+while (( long_offset < long_total )); do
+  long_selected="$fixture/long-selected"
+  awk -v start="$long_offset" 'NR>start && NR<=start+100' "$long_expected" > "$long_selected"
+  long_count="$(awk 'END {print NR}' "$long_selected")"
+  ((long_count <= 100)) || exit 1
+  long_checkpoint="$(awk 'END {print}' "$long_selected")"
+  long_next="$(awk -v start="$long_offset" 'NR==start+101 {print; exit}' "$long_expected")"
+  long_remaining=$((long_total-long_offset-long_count))
+  long_unsigned="$fixture/long-unsigned"
+  awk '/^## Current Point$/ {exit} {print}' "$long_prior" > "$long_unsigned"
+  {
+    printf '## 2026-10-13 — Continued history\n'
+    printf '%s\n' '- **Category:** testing' '- **Status:** Completed' '- **What / why:** Represent the next bounded history batch.' '<details>' '<summary>Technical details and commit evidence</summary>' '- **Important files:** none'
+    awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "} END {print ""}' "$long_selected" | awk '{print "- **Commits:** " $0}'
+    printf '%s\n' '- **Verification:** not run' '</details>' '- **Impact:** History represented.' '## Current Point'
+    printf '%s\n' "- **HEAD:** \`$long_head\` on \`$account_branch\`" "- **Recap checkpoint:** \`$long_checkpoint\`"
+    if ((long_remaining)); then
+      printf '%s\n' "- **Pending committed history:** $long_remaining commits remain; oldest unrepresented: \`$long_next\`"
+    else
+      printf '%s\n' '- **Pending committed history:** None'
+    fi
+    printf '%s\n' '- **Committed work:** The selected history is represented.' '- **Uncommitted work:** None.' '- **Verification:** not run' '- **Next safe point:** Continue pending work if any.' '<!-- recap-state'
+    printf 'branch: %s\nlast_commit: %s\nlast_updated: 2026-10-13\nhistory_head: %s\npending_commits: ' "$account_branch" "$long_checkpoint" "$long_head"
+    if ((long_remaining)); then
+      awk -v start="$long_offset" 'NR>start+100 {printf "%s%s", separator, $0; separator=" "} END {print ""}' "$long_expected"
+    else
+      printf 'none\n'
+    fi
+    printf '%s\n' '-->'
+  } >> "$long_unsigned"
+  long_hash="$( (sha256sum "$long_unsigned" 2>/dev/null || shasum -a 256 "$long_unsigned") | awk 'NR==1 {print $1}')"
+  long_draft="$fixture/long-draft"
+  awk -v hash="$long_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$long_unsigned" > "$long_draft"
+  if ((long_offset == 0)); then
+    [[ "$(awk '/^pending_commits: / {print length($0)}' "$long_draft")" -gt 262144 ]] ||
+      { echo 'Large queue fixture is shorter than a typical single-argument limit' >&2; exit 1; }
+    awk '/^pending_commits: / {sub(/ [0-9a-f]+$/, ""); print; next} !/^output_sha256: / {print}' "$long_draft" > "$fixture/long-bad-unsigned"
+    bad_hash="$( (sha256sum "$fixture/long-bad-unsigned" 2>/dev/null || shasum -a 256 "$fixture/long-bad-unsigned") | awk 'NR==1 {print $1}')"
+    awk -v hash="$bad_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/long-bad-unsigned" > "$fixture/long-bad-draft"
+    if bash "$skill/scripts/validate-recap.sh" "$account_repo" "$fixture/long-bad-draft" "$long_selected" "$long_head" "$long_prior" >/dev/null 2>&1; then
+      echo 'Validator accepted a truncated large queue' >&2; exit 1
+    fi
+    [[ "$(git -C "$account_repo" hash-object "$long_prior")" == "$long_original" ]] || exit 1
+    [[ "$(awk '/^last_commit: / {print $2}' "$long_prior")" == "$account_base" ]] || exit 1
+  fi
+  bash "$skill/scripts/validate-recap.sh" "$account_repo" "$long_draft" "$long_selected" "$long_head" "$long_prior"
+  cat "$long_selected" >> "$long_actual"
+  cp "$long_draft" "$long_prior"
+  ((long_offset += long_count))
+done
+cmp "$long_expected" "$long_actual"
+[[ "$(awk '/^pending_commits: / {print $2}' "$long_prior")" == none ]] || exit 1
+long_complete="$(git -C "$account_repo" hash-object "$long_prior")"
+: > "$fixture/no-pending-selected"
+bash "$skill/scripts/validate-recap.sh" "$account_repo" "$long_prior" "$fixture/no-pending-selected" "$long_head" "$long_prior"
+[[ "$(git -C "$account_repo" hash-object "$long_prior")" == "$long_complete" ]] || exit 1
+
 # An interrupted draft that accounts for one rather than all 1,007 commits
 # cannot advance the checkpoint or modify the already published recap.
 cp "$expected" "$fixture/incomplete"
