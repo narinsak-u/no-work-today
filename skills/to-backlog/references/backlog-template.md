@@ -1,6 +1,6 @@
 # Project Backlog
 
-Use this file as the complete shape for `docs/backlog.md`. Keep all five status sections, even when a section has no items. Replace bracketed placeholders with repository evidence; use `Unknown`, `Needs verification`, or `None` rather than guessing.
+Use this file as the complete shape for `docs/backlog.md`. Keep all five status sections, even when one is empty. Only promote evidenced, pick-up-worthy work with a concrete outcome and a finite task list; omit fields that do not apply instead of filling them with `None`, `—`, or `Not completed`.
 
 **Allowed statuses:** `Todo` · `In Progress` · `Blocked` · `Needs Review` · `Done`
 
@@ -32,21 +32,18 @@ Use this file as the complete shape for `docs/backlog.md`. Keep all five status 
 
 ## Item format (authoring guidance; do not copy this section into `docs/backlog.md`)
 
-Copy this block for each item and place it under the section matching its `Status`. The generated backlog contains item blocks under the five status sections, not this instructional heading.
+Place each item under the heading matching its `Status`. The four core fields are required:
 
-### BL-### — [Short outcome]
+### BL-### — [Concrete outcome]
 
 - **Status:** [Todo | In Progress | Blocked | Needs Review | Done]
-- **Priority:** [High | Medium | Low]
-- **Context:** [Evidence-backed reason this work exists; include `Unknown` or `Needs verification` when necessary.]
+- **Priority:** [High | Medium | Low; explain uncertain priority in Context]
+- **Context:** [Specific repository evidence for this outcome, not a vague reminder]
 - **Tasks:**
-  - [ ] [Finite, pick-up-worthy task supported by evidence]
-- **Related:** [Related issue, commit, document, or backlog item; `None` when absent]
-- **Files:** [`path/to/relevant/file` — why it matters; `None` when no file is supported]
-- **Depends on:** [BL-### prerequisite(s), or `None`]
-- **Blocked by:** [Explicit blocker and evidence, or `None`]
-- **Completion:** [Not completed | Completed]
-  - **Completed on:** [YYYY-MM-DD, or `—`]
-  - **Completion commit:** [commit hash, or `—`]
-  - **Completion evidence:** [Verified command, diff, or review evidence; `—` until done]
-  - **Completion notes:** [What was completed; `—` until done]
+  - [ ] [Finite next action supported by the evidence]
+
+Add `Related`, `Files`, `Depends on`, and `Blocked by` only when supported and useful; do not write placeholder fields. A `Blocked` item names its actual blocker. Do not add completion fields to unfinished items. For `Done`, check off completed tasks and include direct, verified evidence:
+
+- **Completion evidence:** [Verified diff, commit, command result, or review evidence]
+
+Include `Completed on`, `Completion commit`, and `Completion notes` only when known and useful. Existing completion fields and the whole completed item must be retained exactly on later updates, including older `Completion: Completed` records.

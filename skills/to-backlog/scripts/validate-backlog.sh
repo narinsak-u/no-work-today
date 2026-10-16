@@ -8,25 +8,33 @@ file="${1:-docs/backlog.md}"
 # determine whether a candidate is meaningful or a completion claim is true.
 LC_ALL=C awk '
   function error(message) { print "Backlog: " message " (line " NR ")" > "/dev/stderr"; bad = 1 }
-  function finish_item(   field) {
+  function finish_item(   field, evidence) {
     if (!item) return
     for (field in required) if (!seen_field[field]) error("item missing " field)
     if (tasks == 0) error("item has no checklist task")
     if (status != section) error("item status does not match section")
+    if (section == "Blocked" && (!seen_field["Blocked by"] || values["Blocked by"] == "None" ||
+        values["Blocked by"] == "—")) error("Blocked item lacks a concrete blocker")
     if (section == "Done") {
-      if (completion != "Completed") error("Done item lacks completed state")
-      if (values["Completed on"] == "—" || values["Completion commit"] == "—" ||
-          values["Completion evidence"] == "—" || values["Completion notes"] == "—")
-        error("Done item lacks completion record")
-    } else if (completion != "Not completed") error("unfinished item has completed state")
+      evidence = values["Completion evidence"]
+      if (!seen_field["Completion evidence"] || evidence == "—" || evidence == "None" ||
+          evidence == "Not completed" || evidence == "Needs verification" || evidence == "Unknown" ||
+          tolower(evidence) ~ /^(not run|not verified|todo|tbd)([[:space:].:]|$)/)
+        error("Done item lacks direct completion evidence")
+      if (seen_field["Completion"] && completion != "Completed") error("Done item lacks completed state")
+    } else if (seen_field["Completion"] && completion != "Not completed")
+      error("unfinished item has completed state")
     for (field in seen_field) delete seen_field[field]
     for (field in values) delete values[field]
     item = ""
+    status = completion = ""
     tasks = 0
   }
   BEGIN {
-    split("Status|Priority|Context|Tasks|Related|Files|Depends on|Blocked by|Completion|Completed on|Completion commit|Completion evidence|Completion notes", keys, /[|]/)
+    split("Status|Priority|Context|Tasks", keys, /[|]/)
     for (i in keys) required[keys[i]] = 1
+    split("Status|Priority|Context|Tasks|Related|Files|Depends on|Blocked by|Completion|Completed on|Completion commit|Completion evidence|Completion notes", keys, /[|]/)
+    for (i in keys) allowed[keys[i]] = 1
   }
   {
     sub(/\r$/, "")
@@ -71,7 +79,7 @@ LC_ALL=C awk '
       sub(/:\*\*.*/, "", label)
       value = $0
       sub(/^ *- \*\*[^*]+:\*\* /, "", value)
-      if (!required[label]) { error("unknown field"); next }
+      if (!allowed[label]) { error("unknown field"); next }
       if (++seen_field[label] > 1 || value == "") error("duplicate or empty field")
       values[label] = value
       if (label == "Status") {
@@ -169,4 +177,60 @@ if ! LC_ALL=C awk '
 ' "$file"; then
   printf 'Backlog contains a possible secret; remove its value before sharing\n' >&2
   exit 1
+fi
+
+# A document can have a valid ownership fingerprint yet silently replace
+# historical IDs or rewrite a completed item. Compare with the guarded source
+# document when updating; a legacy unsigned source is accepted only after the
+# skill has established that the tracked file is clean.
+if [[ -n "${2:-}" ]]; then
+  previous="$2"
+  [[ -s "$previous" ]] || { printf 'Backlog previous document missing or empty\n' >&2; exit 1; }
+  if LC_ALL=C grep -q '^output_sha256: ' "$previous"; then
+    bash "$0" "$previous" || exit 1
+  fi
+  LC_ALL=C awk '
+    function fail(message) { print "Backlog update: " message > "/dev/stderr"; bad = 1 }
+    /^## / { section = substr($0, 4); item = ""; next }
+    /^### / {
+      split($0, heading, " ")
+      item = heading[2]
+      if (item !~ /^BL-[0-9][0-9][0-9][0-9]*$/) {
+        fail("invalid existing item ID")
+        item = ""
+        next
+      }
+      title = $0
+      sub(/^### BL-[0-9][0-9][0-9][0-9]* — /, "", title)
+      if (NR == FNR) {
+        if (++old_ids[item] > 1) fail("duplicate existing ID " item)
+        old_title_count[title]++
+        old_title[item] = title
+        old_done[item] = (section == "Done")
+        if (old_done[item]) old_record[item] = $0 "\n"
+      } else {
+        if (++new_ids[item] > 1) fail("duplicate updated ID " item)
+        new_title_count[title]++
+        new_title_owner[title] = item
+        if (old_done[item]) new_record[item] = $0 "\n"
+      }
+      next
+    }
+    /^<!-- skill-state$/ { item = ""; next }
+    item != "" && $0 != "" {
+      if (NR == FNR && old_done[item]) old_record[item] = old_record[item] $0 "\n"
+      if (NR != FNR && old_done[item]) new_record[item] = new_record[item] $0 "\n"
+    }
+    END {
+      for (id in old_ids) {
+        if (!(id in new_ids)) fail("missing existing ID " id)
+        else if (old_done[id] && old_record[id] != new_record[id])
+          fail("changed completed record for " id)
+        if (old_title_count[old_title[id]] == 1 && new_title_count[old_title[id]] == 1 &&
+            new_title_owner[old_title[id]] != id)
+          fail("reassigned existing outcome to another ID: " id)
+      }
+      if (bad) exit 1
+    }
+  ' "$previous" "$file" || exit 1
 fi
