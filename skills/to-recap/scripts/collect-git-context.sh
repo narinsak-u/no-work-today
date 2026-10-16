@@ -50,10 +50,15 @@ if [[ -n $checkpoint ]]; then
   oldest=$checkpoint
   older_history=not-applicable
 else
-  total=$(git -C "$repo" rev-list --count --max-count=100 "$head")
+  history_commits=$(git -C "$repo" rev-list --topo-order --max-count=101 "$head")
+  history_count=$(printf '%s\n' "$history_commits" | awk 'NF {n++} END {print n+0}')
+  total=$history_count
+  if ((total > 100)); then total=100; fi
   mode=initial
-  oldest=$(git -C "$repo" rev-list --topo-order --max-count=100 "$head" | awk 'END {print}')
-  if (( $(git -C "$repo" rev-list --count --max-count=101 "$head") > 100 )); then
+  oldest=$(printf '%s\n' "$history_commits" | awk 'NF {commits[++n]=$0} END {
+    if (n > 100) print commits[100]; else print commits[n]
+  }')
+  if ((history_count > 100)); then
     older_history=yes
   else
     older_history=no
@@ -68,6 +73,6 @@ if [[ $mode == resume ]]; then
   git -C "$repo" rev-list --topo-order --skip="$((total-end))" --max-count="$end" "$checkpoint..$head" |
     awk 'NF {commits[++n]=$0} END {for (i=n; i>0; i--) print "commit: " commits[i]}'
 else
-  git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
-    awk 'NF {commits[++n]=$0} END {for (i=n; i>0; i--) print "commit: " commits[i]}'
+  printf '%s\n' "$history_commits" |
+    awk 'NF {commits[++n]=$0} END {if (n>100) n=100; for (i=n; i>0; i--) print "commit: " commits[i]}'
 fi

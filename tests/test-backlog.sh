@@ -15,6 +15,8 @@ printf 'TODO: dependency task\n' > "$root/node_modules/library.js"
 printf 'TODO: built task\n' > "$root/dist/output.js"
 printf 'TODO: generated task\n' > "$root/generated/schema.go"
 printf 'TODO: fake embedded binary\000more data\n' > "$root/src/binary.dat"
+printf 'TODO: oversized task\n' > "$root/src/oversized.dat"
+dd if=/dev/zero bs=1024 count=513 2>/dev/null >> "$root/src/oversized.dat"
 printf 'TODO: skip generated backlog\n' > "$root/docs/backlog.md"
 printf 'API_KEY=live-secret # TODO rotate\n' > "$root/.env"
 printf 'password=live-secret # TODO rotate\n' > "$root/src/config.yml"
@@ -41,11 +43,25 @@ cp "$root/src/credential.go" "$fixture/credential-before"
 cp "$root/src/database.go" "$fixture/database-before"
 
 candidates="$(bash "$skill/scripts/find-todos.sh" "$root")"
+scan_path="$fixture/scan-path"
+mkdir -p "$scan_path"
+real_wc="$(command -v wc)"
+cat > "$scan_path/wc" <<'WC'
+#!/usr/bin/env bash
+printf 'wc\n' >> "$WC_MARKER"
+exec "$REAL_WC" "$@"
+WC
+chmod +x "$scan_path/wc"
+WC_MARKER="$fixture/wc-calls" REAL_WC="$real_wc" PATH="$scan_path:$PATH" \
+  bash "$skill/scripts/find-todos.sh" "$root" > "$fixture/wc-scan"
+[[ ! -s "$fixture/wc-calls" ]] || exit 1
+[[ "$(cat "$fixture/wc-scan")" == "$candidates" ]] || exit 1
 [[ "$candidates" == *'src/payments.go:1:'*'Add retries'* ]] || exit 1
 [[ "$candidates" == *'src/order file.go:1:'*'Preserve order'* ]] || exit 1
 [[ "$candidates" == *'notes.txt:1:'*'migration blockers'* ]] || exit 1
 [[ "$candidates" == *'src/trivial.go:1:'*'Remove debug log'* ]] || exit 1
 [[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* && "$candidates" != *'live-secret'* ]] || exit 1
+[[ "$candidates" != *'oversized.dat'* ]] || exit 1
 [[ "$candidates" == *'src/credential.go:1:'*'sensitive TODO'* && "$candidates" == *'src/database.go:1:'*'sensitive TODO'* && "$candidates" == *'src/encoded-url.go:1:'*'sensitive TODO'* && "$candidates" == *'src/access-token.go:1:'*'sensitive TODO'* ]] || exit 1
 for file in stripe-token.go github-token.go github-pat.go; do
   [[ "$candidates" == *"src/$file:1:"*'sensitive TODO'* ]] || exit 1
@@ -144,6 +160,15 @@ empty_state="$(bash "$skill/scripts/working-tree.sh" "$root")"
 [[ "$empty_state" == *'BRANCH=fixture'* && "$empty_state" == *'HEAD=none'* ]] || exit 1
 git -C "$root" add src/payments.go
 git -C "$root" -c user.name=Fixture -c user.email=fixture@example.test commit -qm initial
+# A repository-configured fsmonitor command must not run during inspection.
+fsmonitor_marker="$fixture/fsmonitor-invoked"
+fsmonitor="$fixture/fsmonitor"
+printf '#!/usr/bin/env bash\ntouch %q\nprintf "token\\n"\n' "$fsmonitor_marker" > "$fsmonitor"
+chmod +x "$fsmonitor"
+printf -v fsmonitor_command '%q' "$fsmonitor"
+git -C "$root" config core.fsmonitor "$fsmonitor_command"
+FSMONITOR_MARKER="$fsmonitor_marker" bash "$skill/scripts/working-tree.sh" "$root" >/dev/null
+[[ ! -e "$fsmonitor_marker" ]] || { echo 'working-tree inspection invoked configured fsmonitor' >&2; exit 1; }
 # This same repository has numerous low-value TODOs, one concrete capture
 # outcome, and local staged/unstaged changes. The backlog below must not
 # promote noise or infer Done from the local diff.
@@ -256,7 +281,7 @@ reject() {
     printf 'Backlog validator accepted %s\n' "$1" >&2
     exit 1
   fi
-  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|live-client-credential|quoted-client-credential|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret' "$fixture/validation.stderr"; then
+  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|live-client-credential|quoted-client-credential|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret|backlogged-secret-credential' "$fixture/validation.stderr"; then
     printf 'Backlog validator disclosed a suspected credential for %s\n' "$1" >&2
     exit 1
   fi
@@ -432,6 +457,8 @@ invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD=[REDACTED]; A
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=<redacted> and DB_PASSWORD name|' 'angle-bracket redaction and name' accept
 invalid 's|Payment capture failure in src/payments.go.|Connect to https://service@api.example.test/tasks|' 'URL without password' accept
 invalid 's|Payment capture failure in src/payments.go.|client_secret=[REDACTED] and OAUTH_CLIENT_SECRET="<redacted>"|' 'safe client secret placeholders' accept
+invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer backlogged-secret-credential|' 'Bearer authorization credential'
+invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer [REDACTED]|' 'redacted Bearer authorization credential' accept
 cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 printf 'Backlog shell scenarios passed.\n'
