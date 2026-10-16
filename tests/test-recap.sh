@@ -201,6 +201,61 @@ files="$(bash "$skill/scripts/changed-files.sh" "$repo" "$files_commit" 0 5)"
 [[ "$files" == *"total: 12"* && "$files" == *"has_more: yes"* && "$files" == *'12 files changed'* ]] || exit 1
 [[ "$(printf '%s\n' "$files" | awk '/^file: / {n++} END {print n+0}')" == 5 ]] || exit 1
 
+# Root summaries compare against the empty tree, while merge summaries use
+# only the first parent and retain stable pagination order.
+summary_repo="$fixture/summary"
+mkdir -p "$summary_repo"
+git -C "$summary_repo" init -q
+git -C "$summary_repo" config user.email recap@example.test
+git -C "$summary_repo" config user.name Recap
+printf 'root\n' > "$summary_repo/root.txt"
+printf 'base\n' > "$summary_repo/shared.txt"
+git -C "$summary_repo" add .
+git -C "$summary_repo" commit -qm root
+summary_root="$(git -C "$summary_repo" rev-parse HEAD)"
+root_files="$(bash "$skill/scripts/changed-files.sh" "$summary_repo" "$summary_root" 0 1)"
+[[ "$root_files" == *'2 files changed, 2 insertions(+)'* &&
+   "$root_files" == *'file: A'*'root.txt'* && "$root_files" == *"total: 2"* &&
+   "$root_files" == *"has_more: yes"* ]] || exit 1
+printf 'first\n' > "$summary_repo/first.txt"
+git -C "$summary_repo" add first.txt
+git -C "$summary_repo" commit -qm first-parent
+git -C "$summary_repo" switch -qc side
+printf 'side\n' > "$summary_repo/side.txt"
+git -C "$summary_repo" add side.txt
+git -C "$summary_repo" commit -qm side
+git -C "$summary_repo" switch -q master 2>/dev/null || git -C "$summary_repo" switch -q main
+printf 'merge\n' > "$summary_repo/merge.txt"
+git -C "$summary_repo" add merge.txt
+git -C "$summary_repo" commit -qm second-parent-file
+git -C "$summary_repo" merge -q --no-ff side -m merge
+summary_merge="$(git -C "$summary_repo" rev-parse HEAD)"
+merge_files="$(bash "$skill/scripts/changed-files.sh" "$summary_repo" "$summary_merge" 0 1)"
+[[ "$merge_files" == *"total: 1"* && "$merge_files" == *"has_more: no"* &&
+   "$merge_files" == *'file: A'*'side.txt'* && "$merge_files" != *'merge.txt'* ]] || exit 1
+
+# A single prepared history listing feeds the initial batch and boundaries;
+# one name-status diff feeds both summary pagination passes.
+git_wrapper="$fixture/git-wrapper"
+mkdir -p "$git_wrapper"
+real_git="$(command -v git)"
+cat > "$git_wrapper/git" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GIT_CALL_LOG"
+exec "$REAL_GIT" "$@"
+SH
+chmod +x "$git_wrapper/git"
+export PATH="$git_wrapper:$PATH" REAL_GIT="$real_git"
+export GIT_CALL_LOG="$fixture/git-calls"
+: > "$GIT_CALL_LOG"
+bash "$skill/scripts/collect-git-context.sh" "$fixture/short history" >/dev/null
+[[ "$(awk '/rev-list/ {n++} END {print n+0}' "$GIT_CALL_LOG")" == 1 ]] || exit 1
+: > "$GIT_CALL_LOG"
+bash "$skill/scripts/changed-files.sh" "$summary_repo" "$summary_merge" 0 1 >/dev/null
+[[ "$(awk '/diff --name-status/ {n++} END {print n+0}' "$GIT_CALL_LOG")" == 1 ]] || exit 1
+unset GIT_CALL_LOG REAL_GIT
+PATH="${PATH#"$git_wrapper:"}"
+
 # Fingerprint and state checks must never rewrite damaged or branch-mismatched recaps.
 recap="$repo/docs/recap.md"
 cat > "$recap" <<DOC

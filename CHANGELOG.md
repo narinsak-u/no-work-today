@@ -3,6 +3,7 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+- Reduced redundant recap Git work by reusing one bounded initial history listing and one changed-file name/status diff for totals and pages.
 - Skip files over the TODO scanner's 512 KiB limit during traversal, avoiding per-file `wc` launches while preserving bounded, redacted scan output.
 - Disabled repository-configured fsmonitor commands throughout working-tree inspection and legacy recap ownership validation.
 - Made catchup overviews more concise with role-described technologies and complete workflow diagrams and endpoint counts.

@@ -28,11 +28,12 @@ else
   command=(git -C "$repo" diff --name-status "$parent" "$commit")
   summary=$(git -C "$repo" diff --shortstat "$parent" "$commit")
 fi
-total=$("${command[@]}" | awk 'END {print NR}')
+files=$("${command[@]}")
+total=$(printf '%s\n' "$files" | awk 'NF {n++} END {print n+0}')
 if ((offset > total)); then echo 'offset exceeds changed-file count' >&2; exit 2; fi
 end=$((offset + limit))
 if ((end > total)); then end=$total; fi
 printf 'commit: %s\ntotal: %s\noffset: %s\nnext_offset: %s\n' "$commit" "$total" "$offset" "$end"
 if ((end < total)); then printf 'has_more: yes\n'; else printf 'has_more: no\n'; fi
 printf 'summary: %s\n' "${summary:-no changes}"
-"${command[@]}" | awk -v start="$offset" -v end="$end" 'NR>start && NR<=end {print "file: " $0}'
+printf '%s\n' "$files" | awk -v start="$offset" -v end="$end" 'NF && NR>start && NR<=end {print "file: " $0}'
