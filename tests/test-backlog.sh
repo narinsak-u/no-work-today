@@ -207,7 +207,7 @@ reject() {
     printf 'Backlog validator accepted %s\n' "$1" >&2
     exit 1
   fi
-  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret' "$fixture/validation.stderr"; then
+  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret|live-client-credential|quoted-client-credential' "$fixture/validation.stderr"; then
     printf 'Backlog validator disclosed a suspected credential for %s\n' "$1" >&2
     exit 1
   fi
