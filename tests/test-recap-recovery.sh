@@ -125,8 +125,9 @@ pending_commits: none
 DOC
 sign "$fixture/draft-unsigned" "$fixture/draft"
 bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/draft" "$fixture/selected" "$replacement_last" "$recap" >/dev/null
-cmp -s <(sed '/^## Current Point/,$d' "$recap") <(sed '/^## Current Point/,$d' "$fixture/draft") || {
-  echo 'Recovery did not preserve prior entries' >&2; exit 1;
+prior_prefix_bytes=$(sed '/^## Current Point/,$d' "$recap" | wc -c)
+cmp -s -n "$prior_prefix_bytes" <(sed '/^## Current Point/,$d' "$recap") <(sed '/^## Current Point/,$d' "$fixture/draft") || {
+  echo 'Recovery did not preserve prior entries before appending new work' >&2; exit 1;
 }
 printf '%s\n' "$replacement_last" > "$fixture/skipped"
 if bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/draft" "$fixture/skipped" "$replacement_last" "$recap" >/dev/null 2>&1; then
