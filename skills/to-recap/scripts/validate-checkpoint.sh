@@ -98,7 +98,7 @@ if (( $(awk '/^history_head: / {n++} END {print n+0}' "$recap") )); then
   trap 'rm -f "$queue_file"' EXIT
   # Never pass a document's pending queue through -v or another process
   # argument: a legitimate long history can exceed the OS per-argument limit.
-  awk '/^pending_commits: / {print substr($0,18)}' "$recap" | tr ' ' '\n' > "$queue_file"
+  awk '/^pending_commits: / {sub(/\r$/, ""); print substr($0,18)}' "$recap" | tr ' ' '\n' > "$queue_file"
   awk '
     $0 == "none" && NR == 1 {empty=1; next}
     $0 !~ /^[0-9a-f]+$/ || (length($0)!=40 && length($0)!=64) || seen[$0]++ {bad=1}

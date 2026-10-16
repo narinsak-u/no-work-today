@@ -4,6 +4,8 @@ All notable changes to this repository are documented here. Releases follow sema
 
 ## [Unreleased]
 - Safely adopt clean tracked legacy recaps by preserving old entries byte-for-byte, validating new entries, and refusing ambiguous or modified history.
+- Kept pending recap queue validation compatible with CRLF documents.
+- Made backlog diff inspection compatible with macOS Bash when no staged or unstaged diff mode is selected.
 - Recorded manual scenarios and exploratory outputs; valid paired comparisons remain unavailable because the runtime exposed skill resources to no-skill controls; trimmed the catchup example to the documented 150-line ceiling.
 - Added a no-skill isolation preflight to prevent contaminated skill comparisons.
 - Clarified that each recap entry keeps selected commit IDs inline on its single **Commits:** field line, based on 100-commit wording micro-tests.

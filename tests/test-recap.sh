@@ -32,13 +32,14 @@ initial_repo="$fixture/short history"
 initial_branch="$(git -C "$initial_repo" branch --show-current)"
 initial_head="$(git -C "$initial_repo" rev-parse HEAD)"
 initial_stale_head="$(git -C "$initial_repo" rev-parse HEAD^)"
+initial_oldest="$(git -C "$initial_repo" rev-list --topo-order --max-count=100 "$initial_head" | awk 'END {print}')"
 initial_selected="$fixture/initial-selected"
 git -C "$initial_repo" rev-list --topo-order --reverse "$initial_head" > "$initial_selected"
 initial_inline="$(awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "}' "$initial_selected")"
 cat > "$fixture/initial-unsigned" <<DOC
 # Project Recap
 ## Scope
-- **Committed range:** Initial window: `$initial_stale_head` through `$initial_head`, inclusive.
+- **Committed range:** Initial window: \`$initial_oldest\` through \`$initial_head\`, inclusive.
 - **Older history:** None; all reachable commits covered
 ## 2026-10-12 — Initial history
 - **Category:** testing
