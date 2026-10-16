@@ -64,7 +64,7 @@ while IFS= read -r -d '' path; do
       lower = tolower(source)
       if (lower ~ /(sk_live_|ghp_|github_pat_)[a-z0-9_-]+/) return 1
       rest = lower
-      while (match(rest, /(^|[^[:alnum:]_])(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)|aws_secret_access_key|authorization)[[:space:]]*[:=][[:space:]]*/)) {
+      while (match(rest, /(^|[^[:alnum:]_])(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|client_secret|token)|aws_secret_access_key|authorization)[[:space:]]*[:=][[:space:]]*/)) {
         rest = substr(rest, RSTART + RLENGTH)
         if (match(rest, /^(\[[^]]+\]|"[[^]]+\]"|\047[[^]]+\047)/) || match(rest, /^[^[:space:],;#]+/)) {
           value = substr(rest, 1, RLENGTH)
@@ -72,7 +72,7 @@ while IFS= read -r -d '' path; do
           if (!placeholder(value)) return 1
           suffix = substr(rest, length_value + 1)
           if (suffix ~ /^[,;]/ &&
-              suffix !~ /^[,;][[:space:]]*(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|token)|aws_secret_access_key|authorization)[[:space:]]*[:=]/) return 1
+              suffix !~ /^[,;][[:space:]]*(([[:alnum:]_]+_)?(password|api_key|access_token|secret_key|client_secret|token)|aws_secret_access_key|authorization)[[:space:]]*[:=]/) return 1
           if (suffix !~ /^([[:space:],;#]|$)/) return 1
           rest = suffix
         }
