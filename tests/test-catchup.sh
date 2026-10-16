@@ -47,117 +47,85 @@ stack="$(bash "$skill/scripts/detect-stack.sh" "$fixture/big workspace")"
 
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
-## 1. Purpose
-A service that manages accounts.
-<<<<<<< HEAD
-## 2. Tech Stack
-Unknown.
-## 3. Architecture
-Application handles requests.
-## 4. Main Flows
-### 🔁 Request
-Observed: the request reaches a handler and returns a response.
-=======
+## Purpose
+A fictional account service helps team members manage access (`README.md`).
 ## Tech Stack
-
-JavaScript and Next.js are declared in the fixture manifest.
+Rust is used by the account service (`src/main.rs`); the fixture manifest also declares Next.js for the browser client.
 ## Project Tree
->>>>>>> d910d8d (feat: improve catchup overview inventories)
 ```text
-Request
-  |
-  v
-Handler
-  |
-  v
-Response
+src/main.rs       service startup and mounted routes
+apps/web/         browser client
+tests/            behavior checks
 ```
-### 🔎 Candidate
-Candidate: the entrypoint is a lead, not a verified runtime path.
+Read `README.md` first for setup, then `src/main.rs` for route registration, then tests for behavior.
+The browser client calls the account service; the service checks access before returning an account.
+## Workflow
+**Partial — 1 confirmed workflow; background triggers need verification.**
+| Workflow | Purpose |
+|---|---|
+| View account | Check access and return an account to a member. |
+### View account
 ```text
-src/main.rs
-  |
-  v
-Needs verification
+Member requests account
+  ↓
+Validate access
+  ↓
+Read account
+  ↓
+Return account
 ```
-<<<<<<< HEAD
-## 5. Core Modules
-`src/` contains application code.
-## 6. Important Files
-`src/main.rs` is a candidate.
-## 7. Data & External Services
-Unknown.
-## 8. Development Workflow
-`cargo test` — run tests (declared in Cargo.toml).
-## 9. Start Here
-Read `src/main.rs`, then tests.
-## 10. Important Notes
-=======
-
 ## API Endpoints
-
-Confirmed count: 1 (fixture example).
-
+**Partial — 2 confirmed HTTP endpoints; admin routes need verification.**
 | Method | Path | Purpose | Access |
 |---|---|---|---|
-| GET | /health | Liveness | Public |
+| GET | `/api/accounts/:id` | Read an account | Authenticated |
+| GET | `/health` | Liveness check | Public |
 ## Scripts
-- `cargo test` — run tests (declared in Cargo.toml).
+- `cargo test` — run tests (`Cargo.toml`); not exercised.
 ## Important Notes
->>>>>>> d910d8d (feat: improve catchup overview inventories)
 - Authentication boundary: verify before changing protected handlers.
 - Unknown: deployment behavior; inspect deployment configuration.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
-<<<<<<< HEAD
-for heading in '## 1. Purpose' '## 5. Core Modules' '## 6. Important Files' '## 8. Development Workflow' '## 10. Important Notes'; do
-  grep -Fxq "$heading" "$fixture/my project/docs/overview.md" || exit 1
-done
-[[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 10 ]] || exit 1
-[[ "$(grep -c '^### ' "$fixture/my project/docs/overview.md")" -eq 2 ]] || exit 1
-[[ "$(grep -c '^  |$' "$fixture/my project/docs/overview.md")" -ge 2 ]] || exit 1
-=======
-for heading in '## Tech Stack' '## Project Tree' '## Workflow' '## API Endpoints' '## Scripts' '## Important Notes'; do
-  grep -Fxq "$heading" "$fixture/my project/docs/overview.md" || exit 1
-done
 [[ "$(grep -c '^## ' "$fixture/my project/docs/overview.md")" -eq 7 ]] || exit 1
->>>>>>> d910d8d (feat: improve catchup overview inventories)
-grep -Fq 'Observed:' "$fixture/my project/docs/overview.md"
-grep -Fq 'Candidate:' "$fixture/my project/docs/overview.md"
+grep -Fq 'Read `README.md` first' "$fixture/my project/docs/overview.md"
+grep -Fq 'Partial — 2 confirmed HTTP endpoints' "$fixture/my project/docs/overview.md"
+
 cat > "$fixture/my project/docs/overview.md" <<'DOC'
 # Project Overview
-## 1. Purpose
+## Purpose
 A fictional service.
-<<<<<<< HEAD
-## 2. Tech Stack
-Unknown.
-## 3. Architecture
-Application handles requests.
-## 4. Main Flows
-=======
 ## Tech Stack
-
 Node.js with an HTTP framework (fixture evidence).
 ## Project Tree
 ```text
-src/
+src/ service implementation
 ```
+Read `README.md` before `src/` and its tests. The service checks requests before persisting records.
 ## Workflow
+**Partial — 1 confirmed workflow; background jobs need verification.**
+| Workflow | Purpose |
+|---|---|
+| Create record | Validate and save a record. |
+### Create record
 ```text
->>>>>>> d910d8d (feat: improve catchup overview inventories)
-request → service → response
-## 5. Core Modules
-`src/` contains application code.
-## 6. Important Files
-`src/main.rs`.
-## 7. Data & External Services
-Unknown.
-## 8. Development Workflow
-- `pnpm prisma:migrate` — changes the database; confirm the target database before running.
-- `node scripts/export.js` — writes an export file; review its destination first.
-## 9. Start Here
-Read `src/main.rs`.
-## 10. Important Notes
+Request
+  ↓
+Validate
+  ↓
+Save record
+  ↓
+Response
+```
+## API Endpoints
+**Partial — 1 confirmed HTTP endpoint; admin routes need verification.**
+| Method | Path | Purpose | Access |
+|---|---|---|---|
+| POST | `/records` | Create a record | Authenticated |
+## Scripts
+- `pnpm prisma:migrate` — changes the database; confirm the target database before running; not exercised.
+- `node scripts/export.js` — writes an export file; review its destination first; not exercised.
+## Important Notes
 - Use `DATABASE_URL=[REDACTED]` in examples; never copy a live connection string.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/my project/docs/overview.md"
@@ -166,23 +134,34 @@ mkdir -p "$fixture/client/docs"
 cat > "$fixture/client/docs/overview.md" <<'DOC'
 # Project Overview
 ## Purpose
-A browser client.
+A fictional browser client for finding notes.
 ## Tech Stack
 TypeScript, React, and Vite.
 ## Project Tree
-src/ browser application
+src/ browser application; begin at `src/main.ts`, then read `src/search.ts`.
 ## Workflow
+**Partial — 1 confirmed workflow; remote search implementation needs verification.**
+| Workflow | Purpose |
+|---|---|
+| Search notes | Query a remote API and display results. |
+### Search notes
 ```text
 Open app
   ↓
-Search notes
+Enter search
+  ↓
+Request remote results
+  ↓
+Render notes
 ```
 ## Scripts
-- `npm run dev` — start local development.
+- `npm run dev` — start local development; not exercised.
 ## Important Notes
 - The API implementation lives in another repository; server routes are not available here.
 DOC
 bash "$skill/scripts/validate-overview.sh" "$fixture/client/docs/overview.md"
+[[ "$(grep -c '^## ' "$fixture/client/docs/overview.md")" -eq 6 ]] || exit 1
+! grep -Fq '## API Endpoints' "$fixture/client/docs/overview.md"
 grep -Fq 'changes the database; confirm the target database before running' "$fixture/my project/docs/overview.md"
 grep -Fq 'review its destination first' "$fixture/my project/docs/overview.md"
 reject_file() {
@@ -199,26 +178,25 @@ reject_file() {
   cmp "$fixture/submitted-before.md" "$candidate"
 }
 cp "$fixture/my project/docs/overview.md" "$fixture/missing-section.md"
-sed -i '/^## 7\. Data & External Services$/d' "$fixture/missing-section.md"
+awk '$0 != "## Tech Stack"' "$fixture/missing-section.md" > "$fixture/missing-section.tmp"
+mv "$fixture/missing-section.tmp" "$fixture/missing-section.md"
 reject_file 'missing major section' "$fixture/missing-section.md" ''
 cp "$fixture/my project/docs/overview.md" "$fixture/extra-section.md"
-sed -i '/^## 10\. Important Notes$/i ## Appendix' "$fixture/extra-section.md"
+awk '/^## Important Notes$/ { print "## Appendix" } { print }' "$fixture/extra-section.md" > "$fixture/extra-section.tmp"
+mv "$fixture/extra-section.tmp" "$fixture/extra-section.md"
 reject_file 'extra major section' "$fixture/extra-section.md" ''
 cp "$fixture/my project/docs/overview.md" "$fixture/reordered-section.md"
 awk '
-  /^## 2\. Tech Stack$/ { print "## 3. Architecture"; print; skip=1; next }
-  /^## 3\. Architecture$/ && skip { next }
+  /^## Tech Stack$/ { print "## Project Tree"; print; skip=1; next }
+  /^## Project Tree$/ && skip { next }
   { print }
 ' "$fixture/reordered-section.md" > "$fixture/reordered.tmp"
 mv "$fixture/reordered.tmp" "$fixture/reordered-section.md"
 reject_file 'reordered major section' "$fixture/reordered-section.md" ''
 cp "$fixture/my project/docs/overview.md" "$fixture/merged-heading.md"
 awk '
-  /^# Project Overview$/ { print; next }
-  /^## 1\. Purpose$/ { print "## 1. Purpose ## 2. Tech Stack"; next }
-  /^A service that manages accounts\.$/ { next }
-  /^## 2\. Tech Stack$/ { next }
-  /^Unknown\.$/ && !unknown_seen++ { next }
+  /^## Purpose$/ { print "## Purpose ## Tech Stack"; next }
+  /^## Tech Stack$/ { next }
   { print }
 ' "$fixture/merged-heading.md" > "$fixture/merged-heading.tmp"
 mv "$fixture/merged-heading.tmp" "$fixture/merged-heading.md"
@@ -244,13 +222,14 @@ expect_validation() {
   fi
 }
 
-<<<<<<< HEAD
-=======
-cp "$fixture/my project/docs/overview.md" "$fixture/missing-tech-stack.md"
-grep -Fv '## Tech Stack' "$fixture/missing-tech-stack.md" > "$fixture/missing-tech-stack.tmp"
-mv "$fixture/missing-tech-stack.tmp" "$fixture/missing-tech-stack.md"
-reject_file 'missing Tech Stack section' "$fixture/missing-tech-stack.md" ''
->>>>>>> d910d8d (feat: improve catchup overview inventories)
+cp "$fixture/my project/docs/overview.md" "$fixture/wrong-place-endpoints.md"
+awk '
+  /^## API Endpoints$/ { print "## Scripts"; next }
+  /^## Scripts$/ { print "## API Endpoints"; next }
+  { print }
+' "$fixture/wrong-place-endpoints.md" > "$fixture/wrong-place.tmp"
+mv "$fixture/wrong-place.tmp" "$fixture/wrong-place-endpoints.md"
+reject_file 'misordered optional endpoints' "$fixture/wrong-place-endpoints.md" ''
 for unsafe in \
   'API_KEY=sk-test-secret' \
   'password=secretvalue' \
@@ -297,4 +276,120 @@ digest="$( (cat "$fixture/my project/docs/overview.md"; printf '<!-- skill-state
 cat "$fixture/my project/docs/overview.md" > "$fixture/no-final-lf.md"
 printf '<!-- skill-state\noutput_sha256: %s\n-->' "$digest" >> "$fixture/no-final-lf.md"
 bash "$skill/scripts/validate-overview.sh" "$fixture/no-final-lf.md"
+# The published fictional example and generated-fixture shape share this validator.
+bash "$skill/scripts/validate-overview.sh" "$skill/../../examples/overview.md"
+for helper in "$skill"/scripts/*.sh; do
+  bash -n "$helper"
+done
+if grep -nE '^(<<<<<<< |=======|>>>>>>> )' "$skill/SKILL.md" "$skill/references/overview-template.md" "$skill"/scripts/*.sh "$skill/../../examples/overview.md" "$skill/../../GLOSSARY.md"; then
+  printf 'Published catch-up files contain merge markers\n' >&2
+  exit 1
+fi
+# A separately installed skill validates a signed overview against a representative
+# repository. The document below is a fixture of expected agent prose, not a
+# claim that shell helpers generate semantic explanations.
+installed="$fixture/installed agent"
+project="$fixture/evidenced notes"
+mkdir -p "$installed" "$project/src" "$project/docs"
+cp -R "$skill" "$installed/to-catchup"
+cat > "$project/README.md" <<'DOC'
+# Notes API
+An example service for team members to save and read private notes.
+Inspect src/server.js for HTTP registration and access checks before changes.
+DOC
+cat > "$project/package.json" <<'DOC'
+{"scripts":{"test":"node --test"},"dependencies":{"express":"4.0.0"}}
+DOC
+cat > "$project/src/server.js" <<'DOC'
+const express = require('express');
+const app = express();
+app.use(express.json());
+const api = express.Router();
+function requireMember(req, res, next) {
+  const member = req.get('x-member-id');
+  if (!member) return res.sendStatus(401);
+  req.user = { id: member };
+  next();
+}
+const notes = new Map();
+api.post('/notes', requireMember, (req, res) => {
+  const id = String(notes.size + 1);
+  notes.set(id, { owner: req.user.id, body: req.body.body });
+  res.status(201).json({ id });
+});
+api.get('/notes/:id', requireMember, (req, res) => {
+  const note = notes.get(req.params.id);
+  if (!note || note.owner !== req.user.id) return res.sendStatus(404);
+  res.json(note);
+});
+app.use('/api', api);
+app.get('/health', (req, res) => res.sendStatus(200));
+module.exports = app;
+DOC
+installed_skill="$installed/to-catchup"
+[[ "$(bash "$installed_skill/scripts/scan-project.sh" "$project")" == *'src/server.js'* ]] || exit 1
+[[ "$(bash "$installed_skill/scripts/detect-stack.sh" "$project")" == *'Express'* ]] || exit 1
+cat > "$project/docs/overview.md" <<'DOC'
+# Project Overview
+## Purpose
+The Notes API lets team members save and read their private notes (`README.md`).
+## Tech Stack
+Node.js runs the CommonJS service; Express registers HTTP routes (`src/server.js`, `package.json`).
+## Project Tree
+```text
+README.md       purpose and safety guidance
+src/server.js   router, access checks, in-memory notes
+package.json    test command and framework dependency
+```
+Start with `README.md`, follow `src/server.js` from route to response, then inspect `package.json` for the test command. The router checks membership before reading or writing the in-memory map.
+## Workflow
+**Complete — 2 verified workflows** in the inspected `src/server.js`.
+| Workflow | Purpose |
+|---|---|
+| Save note | Authenticate a member and store a note. |
+| Read note | Return a stored note only to its owner. |
+### Save note
+```text
+POST /api/notes
+  ↓
+Require member
+  ↓
+Save note to in-memory map
+  ↓
+Return ID with 201
+```
+### Read note
+```text
+GET /api/notes/:id
+  ↓
+Require member
+  ↓
+Check stored owner
+  ↓
+Return note or 404
+```
+## API Endpoints
+**Complete — 3 registered HTTP endpoints** (`src/server.js`).
+| Method | Path | Purpose | Access |
+|---|---|---|---|
+| POST | `/api/notes` | Save a note | Authenticated |
+| GET | `/api/notes/:id` | Read a note | Authenticated |
+| GET | `/health` | Liveness check | Public |
+## Scripts
+- `npm test` — Node's test runner (`package.json`); not exercised.
+## Important Notes
+- The in-memory map loses notes when the process restarts; do not treat it as durable storage.
+- `requireMember` trusts the `x-member-id` request header in this fixture; it is not production authentication. Replace it with verified identity before exposing real private notes.
+- No database, queue, or deployment setup is evidenced. Deployment security is **Needs verification**.
+<!-- skill-state
+output_sha256: FINGERPRINT
+-->
+DOC
+digest="$(LC_ALL=C sed '/^output_sha256: /d' "$project/docs/overview.md" | (sha256sum 2>/dev/null || shasum -a 256) | awk '{print $1}')"
+awk -v digest="$digest" '{sub(/output_sha256: FINGERPRINT/, "output_sha256: " digest); print}' "$project/docs/overview.md" > "$project/docs/signed.md"
+mv "$project/docs/signed.md" "$project/docs/overview.md"
+bash "$installed_skill/scripts/validate-overview.sh" "$project/docs/overview.md"
+grep -Fq 'Start with `README.md`' "$project/docs/overview.md"
+grep -Fq 'Needs verification' "$project/docs/overview.md"
+[[ "$(find "$project/docs" -type f | wc -l | tr -d ' ')" -eq 1 ]] || exit 1
 printf 'Catch-up shell scenarios passed.\n'

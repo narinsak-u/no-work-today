@@ -3,41 +3,31 @@ set -euo pipefail
 
 file="${1:-docs/overview.md}"
 [[ -s "$file" ]] || { printf 'Overview missing or empty: %s\n' "$file" >&2; exit 1; }
-<<<<<<< HEAD
 expected_headings=(
   '# Project Overview'
-  '## 1. Purpose'
-  '## 2. Tech Stack'
-  '## 3. Architecture'
-  '## 4. Main Flows'
-  '## 5. Core Modules'
-  '## 6. Important Files'
-  '## 7. Data & External Services'
-  '## 8. Development Workflow'
-  '## 9. Start Here'
-  '## 10. Important Notes'
+  '## Purpose'
+  '## Tech Stack'
+  '## Project Tree'
+  '## Workflow'
 )
-mapfile -t actual_headings < <(grep -E '^#{1,2} ' "$file" || true)
-headings_match=1
-if [[ "${#actual_headings[@]}" -ne "${#expected_headings[@]}" ]]; then
-  headings_match=0
-else
-  for i in "${!expected_headings[@]}"; do
-    [[ "${actual_headings[$i]}" == "${expected_headings[$i]}" ]] || headings_match=0
-  done
+if grep -Fxq '## API Endpoints' "$file"; then
+  expected_headings+=('## API Endpoints')
 fi
-if [[ "$headings_match" -ne 1 ]]; then
+expected_headings+=('## Scripts' '## Important Notes')
+actual_headings=()
+while IFS= read -r heading; do
+  actual_headings+=("$heading")
+done < <(grep -E '^#{1,2} ' "$file" || true)
+if [[ "${#actual_headings[@]}" -ne "${#expected_headings[@]}" ]]; then
   printf 'Overview must contain exactly the required major sections in order\n' >&2
   exit 1
 fi
-=======
-for heading in '# Project Overview' '## Purpose' '## Tech Stack' '## Project Tree' '## Workflow' '## Scripts' '## Important Notes'; do
-  if ! grep -Fxq "$heading" "$file"; then
-    printf 'Overview missing section: %s\n' "$heading" >&2
+for i in "${!expected_headings[@]}"; do
+  if [[ "${actual_headings[$i]}" != "${expected_headings[$i]}" ]]; then
+    printf 'Overview must contain exactly the required major sections in order\n' >&2
     exit 1
   fi
 done
->>>>>>> d910d8d (feat: improve catchup overview inventories)
 if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|github_pat_)[A-Za-z0-9_-]{8,}' "$file" ||
   LC_ALL=C awk '
     function placeholder(value, quote) {
