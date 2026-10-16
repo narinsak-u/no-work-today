@@ -1,6 +1,6 @@
 # Project Recap
 
-Use this template for `docs/recap.md`; replace bracketed placeholders with verified repository evidence. Do not leave placeholders in a completed recap. Keep old dated entries unchanged when appending new ones.
+Use this template for `docs/recap.md`; replace bracketed placeholders with verified repository evidence. Do not leave placeholders in a completed recap. A safely adopted legacy recap keeps Scope and every previous dated entry byte-for-byte, even if old entries lack this template's fields; only newly appended entries must use the format below. Stop instead of rewriting ambiguous or modified legacy history.
 
 ## Scope
 
@@ -44,9 +44,11 @@ last_commit: <latest commit whose changes are fully represented by the published
 last_updated: YYYY-MM-DD
 history_head: <HEAD pinned for continuation>
 pending_commits: <unrepresented full IDs, oldest-first; or `none`>
+legacy_prefix: <old dated-entry count> <SHA-256 of exact source prefix>
 output_sha256: <64 lowercase hexadecimal characters>
 -->
 
 Calculate `output_sha256` from the complete document after removing ONLY the entire `output_sha256: ...` line, including its line terminator; insert it immediately before `-->`. Set `history_head` to the captured `HEAD`. For existing recaps, set `pending_commits` to the complete ordered remainder after the batch, including when initializing a legacy recap; use `none` for a new initial-window recap or when caught up. Existing queue metadata may be removed only after all its hashes are represented.
+For an adopted legacy recap, count only the unchanged old dated entries and compute the `legacy_prefix` digest over the byte-exact source prefix before `## Current Point`. Preserve this field unchanged in every later signed update. Never add it for a fresh or already signed recap; the validator uses it to keep old-format entries intact while requiring all newly appended entries to follow today's format.
 
 For readability, group repetitive numbered records in chronological groups of at most 10 commits. Keep each hash-and-note pair on the same physical **Commits:** line; never wrap it onto continuation lines.
