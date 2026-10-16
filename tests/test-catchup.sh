@@ -369,6 +369,8 @@ assert_role_described_stack "$skill/../../examples/overview.md"
 assert_workflow_diagrams_complete "$skill/../../examples/overview.md"
 assert_complete_workflow_count "$skill/../../examples/overview.md" 5
 assert_endpoint_count "$skill/../../examples/overview.md" 7
+grep -Fq '**Complete — 5 fictional workflows (illustrative scenario only).' "$skill/../../examples/overview.md"
+grep -Fq '**Complete — 7 fictional HTTP endpoints (illustrative scenario only).' "$skill/../../examples/overview.md"
 for helper in "$skill"/scripts/*.sh; do
   bash -n "$helper"
 done

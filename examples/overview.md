@@ -31,7 +31,7 @@ The browser calls the router; domain rules protect storage, and queued changes r
 
 ## Workflow
 
-**Complete — 5 verified workflows.**
+**Complete — 5 fictional workflows (illustrative scenario only).**
 
 | Workflow | Purpose |
 |---|---|
@@ -110,7 +110,7 @@ Return note if access is allowed
 
 ## API Endpoints
 
-**Complete — 7 registered HTTP endpoints.**
+**Complete — 7 fictional HTTP endpoints (illustrative scenario only).**
 
 | Method | Path | Purpose | Access |
 |---|---|---|---|
@@ -137,5 +137,5 @@ Fictional commands below were not exercised; verify commands and target environm
 - Never copy credential values or sensitive connection strings. Deployment and search-index settings are **Needs verification**.
 
 <!-- skill-state
-output_sha256: a14fe76203f4463b9af50c0ac95438d3ae358f1bc358580950b2709a92876c18
+output_sha256: 0e11f6f723ad4a782bc2c95b77e095d90c8b8b7874199707916805fae7b6b9e7
 -->
