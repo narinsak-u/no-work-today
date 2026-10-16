@@ -6,10 +6,9 @@ DGA Dashboard presents Thailand public agencies' digital-government assessment r
 
 ## 2. Tech Stack
 
-- Bun 1.3.14 and Turbo manage the monorepo; React, TypeScript, Vite, and TanStack Router implement the browser app (`package.json`, `apps/web/package.json`).
-- Rust, Tokio, Axum, SQLx, and SQLite provide the API, authentication, snapshot storage, and static-file serving (`crates/server/Cargo.toml`).
-- Python report modules prepare data and publish DOCX/PDF artifacts; Playwright captures dashboard charts and LibreOffice converts DOCX to PDF (`report-pdf/README.md`).
-- Docker packages the web build and API into one Debian runtime (`Dockerfile`).
+- Bun 1.3.14, Turbo, React, TypeScript, Vite, and TanStack Router power the web workspace (`package.json`, `apps/web/package.json`).
+- Rust, Tokio, Axum, SQLx, and SQLite power the API and storage (`crates/server/Cargo.toml`).
+- Python, Playwright, and LibreOffice prepare report PDFs; Docker packages the web build and API (`report-pdf/README.md`, `Dockerfile`).
 
 ## 3. Architecture
 
@@ -18,18 +17,14 @@ Report CSVs and generated inputs
   |
   v
 Generators
-  |
   +--> committed JSON --> React dashboard
-  |
   +--> chart assets
 
 Browser
   |
   v
 Axum API
-  |
   +--> SQLite
-  |
   +--> published PDF files
 ```
 
@@ -37,7 +32,7 @@ Axum API
 
 ### 📊 Dashboard data
 
-The web build prepares JSON for browser rendering; the API also exposes an overview snapshot endpoint (`apps/web/package.json`, `apps/web/src/routes/index.tsx`, `crates/server/src/api.rs`).
+The web build prepares JSON for browser rendering (`apps/web/package.json`, `apps/web/src/routes/index.tsx`).
 
 ```text
 Report inputs and CSV snapshots
@@ -54,25 +49,22 @@ Overview and organization routes
 
 ### 🔐 Sign-in and session restore
 
-The browser posts credentials to Axum, which checks the seeded SQLite user and issues a JWT; the client keeps it in session storage and requests `/api/me` to restore identity (`apps/web/src/api.ts`, `apps/web/src/hooks/use-auth-session.ts`, `crates/server/src/auth.rs`).
+Axum verifies the seeded SQLite user, returns a JWT, and `/api/me` restores identity (`apps/web/src/api.ts`, `apps/web/src/hooks/use-auth-session.ts`, `crates/server/src/auth.rs`).
 
 ```text
 Login form
   |
   v
-/api/signin
+POST /api/signin
   |
   v
 Axum auth and seeded SQLite user
   |
   v
-JWT returned to browser
+JWT stored in session storage
   |
   v
-Session storage
-  |
-  v
-/api/me
+GET /api/me
   |
   v
 Restored identity
@@ -80,52 +72,25 @@ Restored identity
 
 ### 📄 Report publication and download
 
-Offline tooling validates a report batch and updates `current.json`; authenticated API download resolves an artifact from organization claims, not a client filename (`report-pdf/README.md`, `crates/server/src/report.rs`).
+Offline jobs validate a batch and update `current.json`; the authenticated API selects the PDF by organization claim (`report-pdf/README.md`, `crates/server/src/report.rs`).
 
 ```text
-CSV inputs, templates, chart assets
+CSV inputs and templates
   |
   v
-Report rendering and PDF conversion
+Render charts and convert PDF
   |
   v
-Batch validation
-  |
-  v
-Published manifest and current.json
-  |
-  v
-Validated published PDF artifact
-  |
-  v
-Offline publication complete; later request is separate
+Validate batch and update current.json
   |
   v
 Authenticated /api/me/report.pdf request
   |
   v
-Organization claim lookup
+Organization claim selects artifact
   |
   v
 Published PDF response
-```
-
-### 🚀 Production serving
-
-Docker packages the web build and reports alongside Axum, whose listener serves the SPA and API on port 3000 (`Dockerfile`, `crates/server/src/app.rs`, `tests/docker-smoke.sh`).
-
-```text
-Browser
-  |
-  v
-Axum listener :3000
-  |
-  +--> SPA assets
-  |
-  +--> /api routes
-  |
-  v
-SQLite and report files
 ```
 
 ## 5. Core Modules
@@ -144,14 +109,11 @@ report-pdf/
 └── src/           — report preparation and publication
 ```
 
-
 ## 6. Important Files
 
-- `apps/web/src/main.tsx` and `apps/web/src/router.tsx`: browser mount and route setup.
-- `apps/web/src/api.ts` and `apps/web/src/hooks/use-auth-session.ts`: HTTP boundary and session lifecycle.
-- `crates/server/src/main.rs`, `app.rs`, and `config.rs`: startup, router composition, and environment configuration.
-- `crates/server/src/auth.rs` and `report.rs`: JWT identity and authenticated artifact delivery.
-- `Justfile`, `Dockerfile`, and `tests/docker-smoke.sh`: development/report commands, production image, and one-port smoke coverage.
+- `apps/web/src/main.tsx`, `router.tsx`, `api.ts`, and `use-auth-session.ts`: browser startup, routes, and session requests.
+- `crates/server/src/main.rs`, `app.rs`, `config.rs`, `auth.rs`, and `report.rs`: API setup, configuration, authentication, and report delivery.
+- `Justfile`, `Dockerfile`, and `tests/docker-smoke.sh`: development commands, runtime packaging, and production smoke test.
 
 ## 7. Data & External Services
 
@@ -162,22 +124,18 @@ report-pdf/
 
 ## 8. Development Workflow
 
-Commands below are documented in manifests, `Justfile`, and repository guidance; **none were exercised for this catchup**.
+Commands are documented in manifests and `Justfile`; none were exercised during catch-up.
 
-- Install JavaScript workspace dependencies: `bun install --frozen-lockfile`.
-- Start API and Vite together: `just dev` (API `127.0.0.1:3000`, web `127.0.0.1:5173`). API only: `just dev-api`; web only: `just dev-web`.
-- Typecheck and test: `bun run typecheck`, `bun run test`. Build: `bun run build`; web build regenerates its JSON inputs first.
-- Check Rust: `cargo check -p dga-dashboard-server`; backend integration tests: `cargo test -p dga-dashboard-server --test api`.
-- API-only smoke: `env -u WEB_ROOT sh tests/smoke.sh`. Production image smoke: `sh tests/docker-smoke.sh` (requires Docker; builds/runs a container and uses a test port).
-- Optional report setup: create `report-pdf/.venv`, install `report-pdf/requirements.txt`, Playwright Chromium, LibreOffice, then `just install-report-fonts`. Data downloads/generation and `just publish-reports` alter local source snapshots or report artifacts; review their output before committing. See `report-pdf/README.md` and `Justfile`.
+- Install and run: `bun install --frozen-lockfile`, `just dev` (API `127.0.0.1:3000`, web `127.0.0.1:5173`); use `just dev-api` or `just dev-web` for one service.
+- Typecheck, test, and build: `bun run typecheck`, `bun run test`, `bun run build`; web builds regenerate JSON inputs.
+- Check and smoke-test Rust/API: `cargo check -p dga-dashboard-server`, `cargo test -p dga-dashboard-server --test api`, `env -u WEB_ROOT sh tests/smoke.sh`, `sh tests/docker-smoke.sh` (requires Docker and a test port).
+- Optional report setup: create `.venv`, install `requirements.txt`, Playwright Chromium, and LibreOffice, then run `just install-report-fonts`. Downloads and `just publish-reports` change snapshots or artifacts; review them before committing.
 
 ## 9. Start Here
 
-1. Read `docs/ARCHITECTURE.md` for system boundaries and deployment, then `docs/OVERVIEW.md` for dashboard and report user flows.
-2. Follow browser startup through `apps/web/src/main.tsx`, `router.tsx`, and `apps/web/src/api.ts`.
-3. Follow backend composition through `crates/server/src/main.rs`, `app.rs`, and `config.rs`; then inspect `auth.rs` and `report.rs` for identity and artifact boundaries.
-4. For data/report work, read `report-pdf/README.md` and `report-pdf/CONTEXT.md`, then inspect matching modules under `report-pdf/src/`.
-5. Use `Justfile`, root/web package manifests, and `crates/server/tests/api.rs` to select a command and see tested behavior.
+1. Read `docs/ARCHITECTURE.md` and `docs/OVERVIEW.md`, then trace browser startup through `main.tsx`, `router.tsx`, and `api.ts`.
+2. Trace backend setup through `main.rs`, `app.rs`, and `config.rs`; inspect `auth.rs` and `report.rs` for identity and artifact boundaries.
+3. For data/report work, read `report-pdf/README.md` and `CONTEXT.md`; use `Justfile`, manifests, and API tests to choose a command.
 
 ## 10. Important Notes
 
@@ -188,5 +146,5 @@ Commands below are documented in manifests, `Justfile`, and repository guidance;
 - `docs/recap.md` and `docs/backlog.md` were not present. External production hosting, secret provisioning, and persistent-volume ownership are not defined here; verify deployment configuration before operating production.
 
 <!-- skill-state
-output_sha256: 06e59c5e440d1d96d0b6ba93bc5c4a07299f72aea9527292da989d9663581546
+output_sha256: 70be5476f26b6fd04e0461840371228fab8427e7d1e8d3a7bddb8baefc091130
 -->

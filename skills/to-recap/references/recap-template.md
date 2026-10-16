@@ -22,7 +22,7 @@ Use this template for `docs/recap.md`; replace bracketed placeholders with verif
 
 - **Important files:**
   - `[path]` — [verified role; use `None` for an empty commit]
-- **Commits:** `[full hash]` — [concise technical note; list every selected full hash exactly once]
+- **Commits:** `[full hash]` — [concise technical note; list every selected full hash exactly once on this same physical line]
 - **Junior notes:** [optional next reading step or explanation]
 - **Verification:** [observed command and outcome, `not run`, `unknown`, or `reported by commit`]
 
@@ -32,7 +32,7 @@ Use this template for `docs/recap.md`; replace bracketed placeholders with verif
 
 - **HEAD:** `[full commit]` on `[branch]`
 - **Recap checkpoint:** `[last_commit; latest commit fully represented by the published entries]`
-- **Pending committed history:** `None` when caught up; otherwise, `[N] commits remain; oldest unrepresented: [full hash]`.
+- **Pending committed history:** `None` when caught up; otherwise, `1 commit remains; oldest unrepresented: HASH` or `N commits remain; oldest unrepresented: HASH`.
 - **Committed work:** [what is complete through the checkpoint; link to entries above]
 - **Uncommitted work:** [staged, unstaged, and untracked work separately, including the skill-owned recap output]
 - **Verification:** [only checks actually observed; label skipped/unknown checks]
@@ -42,7 +42,11 @@ Use this template for `docs/recap.md`; replace bracketed placeholders with verif
 branch: <current branch>
 last_commit: <latest commit whose changes are fully represented by the published entries>
 last_updated: YYYY-MM-DD
+history_head: <HEAD pinned for continuation>
+pending_commits: <unrepresented full IDs, oldest-first; or `none`>
 output_sha256: <64 lowercase hexadecimal characters>
 -->
 
-Calculate `output_sha256` from the complete document after removing ONLY the entire `output_sha256: ...` line, including its line terminator; insert it immediately before `-->`. Never publish a draft until its full selected commit set passes validation. Existing pre-migration queue fields can be removed only after all their hashes have been accounted for.
+Calculate `output_sha256` from the complete document after removing ONLY the entire `output_sha256: ...` line, including its line terminator; insert it immediately before `-->`. Set `history_head` to the captured `HEAD`. For existing recaps, set `pending_commits` to the complete ordered remainder after the batch, including when initializing a legacy recap; use `none` for a new initial-window recap or when caught up. Existing queue metadata may be removed only after all its hashes are represented.
+
+For readability, group repetitive numbered records in chronological groups of at most 10 commits. Keep each hash-and-note pair on the same physical **Commits:** line; never wrap it onto continuation lines.

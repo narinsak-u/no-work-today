@@ -23,7 +23,7 @@ awk '
   /^# Project Recap$/ {title++}
   /^## Scope$/ {scope++}
   /^## Current Point$/ {current++; in_entry=0}
-  /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {entries++; in_entry=1}
+  /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {entries++; in_entry=1; entry_notes=0}
   in_entry && /^- \*\*Category:\*\* / {categories++;
     if ($0 !~ /^- \*\*Category:\*\* (features|fixes|refactors|infrastructure|testing|documentation|security|performance)$/) invalid=1}
   in_entry && /^- \*\*Status:\*\* / {statuses++;
@@ -32,7 +32,7 @@ awk '
   in_entry && /^- \*\*Important files:\*\*($| )/ {files++}
   in_entry && /^- \*\*Commits:\*\* / {commits++}
   in_entry && /^- \*\*Impact:\*\* / {impacts++}
-  in_entry && /^- \*\*Junior notes:\*\* / {notes++}
+  in_entry && /^- \*\*Junior notes:\*\* / {entry_notes++; if (entry_notes > 1) invalid=1}
   in_entry && /^- \*\*Verification:\*\* / {verifications++}
   /^- \*\*HEAD:\*\* / {heads++}
   /^- \*\*Recap checkpoint:\*\* / {checkpoints++}
@@ -40,7 +40,7 @@ awk '
   /^- \*\*Committed work:\*\* / {committed++}
   /^- \*\*Uncommitted work:\*\* / {uncommitted++}
   /^- \*\*Next safe point:\*\* / {safe_points++}
-  END {if (invalid || title!=1 || scope!=1 || current!=1 || entries<1 || categories!=entries || statuses!=entries || whys!=entries || files!=entries || commits!=entries || impacts!=entries || notes!=entries || verifications!=entries || heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 || uncommitted!=1 || safe_points!=1) exit 1}
+  END {if (invalid || title!=1 || scope!=1 || current!=1 || entries<1 || categories!=entries || statuses!=entries || whys!=entries || files!=entries || commits!=entries || impacts!=entries || verifications!=entries || heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 || uncommitted!=1 || safe_points!=1) exit 1}
 ' "$recap" || fail 'required sections or work-entry fields missing'
 if LC_ALL=C awk '
   function placeholder(value, quote, tail) {
@@ -143,6 +143,8 @@ if [[ -n $selected ]]; then
     cmp -s "$selected" "$expected_ids" ||
       fail 'selected history does not cover the complete initial window'
     [[ $checkpoint == "$head" ]] || fail 'initial checkpoint must cover selected HEAD'
+    draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
+    [[ $draft_history_head == "$head" ]] || fail 'initial history head does not match captured HEAD'
     pending=no
   else
     [[ -f $source_recap ]] || fail 'original recap missing'
@@ -182,10 +184,19 @@ if [[ -n $selected ]]; then
     [[ $checkpoint == "$(awk 'END {print}' "$expected_batch")" ]] ||
       fail 'checkpoint does not match final selected commit'
     pending_count=$(awk -v selected="$selected_count" 'NR>selected {n++} END {print n+0}' "$expected_full")
+    # A scalar checkpoint cannot safely resume a partially represented merge history.
     if (( pending_count > 0 )); then
       pending=yes
       next_unrepresented=$(awk -v selected="$selected_count" 'NR==selected+1 {print; exit}' "$expected_full")
+      draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
+      draft_pending=$(awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$recap")
+      [[ $draft_history_head == "$head" && -n $draft_pending && $draft_pending != none ]] ||
+        fail 'remaining history requires pinned pending queue'
+      expected_pending=$(awk -v selected="$selected_count" 'NR>selected {if (n) printf " "; printf "%s", $0; n++} END {if (n) printf "\n"}' "$expected_full")
+      [[ $draft_pending == "$expected_pending" ]] || fail 'pending queue does not match remaining history'
     else
+      draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
+      [[ $draft_history_head == "$head" ]] || fail 'history head does not match captured HEAD'
       pending=no
       next_unrepresented=''
     fi
@@ -194,7 +205,14 @@ if [[ -n $selected ]]; then
   sed 's/\r$//' "$recap" | grep -Fx -- "- **HEAD:** \`$head\` on \`$branch\`" >/dev/null || fail 'Current Point HEAD or branch disagrees with Git'
   sed 's/\r$//' "$recap" | grep -Fx -- "- **Recap checkpoint:** \`$checkpoint\`" >/dev/null || fail 'Current Point checkpoint disagrees with state'
   if [[ $pending == yes ]]; then
-    sed 's/\r$//' "$recap" | grep -Fx -- "- **Pending committed history:** $pending_count commits remain; oldest unrepresented: \`$next_unrepresented\`" >/dev/null ||
+    if [[ $pending_count == 1 ]]; then
+      pending_noun=commit
+      pending_verb=remains
+    else
+      pending_noun=commits
+      pending_verb=remain
+    fi
+    sed 's/\r$//' "$recap" | grep -Fx -- "- **Pending committed history:** $pending_count $pending_noun $pending_verb; oldest unrepresented: \`$next_unrepresented\`" >/dev/null ||
       fail 'pending committed history does not match the remaining batch'
   else
     sed 's/\r$//' "$recap" | grep -Fx -- '- **Pending committed history:** None' >/dev/null ||
