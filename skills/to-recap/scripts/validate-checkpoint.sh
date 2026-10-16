@@ -13,8 +13,14 @@ fail() { echo "unsafe recap checkpoint: $*" >&2; exit 1; }
 [[ -f $recap ]] || fail 'recap does not exist'
 git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail 'not a Git worktree'
 [[ $(git -C "$repo" rev-parse --is-shallow-repository) == false ]] || fail 'shallow history'
-branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'detached or unborn HEAD'
-head=$(git -C "$repo" rev-parse --verify HEAD^{commit} 2>/dev/null) || fail 'no commits'
+branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'detached HEAD'
+head=$(git -C "$repo" rev-parse --verify HEAD^{commit} 2>/dev/null) || {
+  git -C "$repo" show-ref --verify --quiet "refs/heads/$branch" &&
+    fail 'invalid HEAD commit'
+  [[ -z $(git -C "$repo" rev-list --all --max-count=1) ]] ||
+    fail 'unborn branch with existing history'
+  head=none
+}
 [[ -z $expected_head || $expected_head == "$head" ]] || fail 'HEAD changed'
 # Require one final, well-formed state block and its fingerprint immediately
 # before the closing delimiter. Do not normalize any of the hashed bytes.
@@ -38,6 +44,15 @@ fi
 saved_branch=$(awk '/^branch: / {sub(/\r$/, ""); print substr($0,9)}' "$recap")
 [[ $saved_branch == "$branch" ]] || fail 'branch mismatch; preserve existing entries'
 checkpoint=$(awk '/^last_commit: / {sub(/\r$/, ""); print $2}' "$recap")
+if [[ $head == none ]]; then
+  [[ $checkpoint == none ]] || fail 'empty history cannot have a recap checkpoint'
+  [[ $(awk '/^history_head: / {n++} END {print n+0}' "$recap") == 1 &&
+     $(awk '/^history_head: / {print $2}' "$recap") == none &&
+     $(awk '/^pending_commits: / {print $2}' "$recap") == none ]] ||
+    fail 'empty history requires no history head or pending commits'
+  printf 'branch: %s\nhead: none\ncheckpoint: none\n' "$branch"
+  exit 0
+fi
 [[ $checkpoint =~ ^[0-9a-f]{40,64}$ ]] || fail 'invalid checkpoint ID'
 [[ $(git -C "$repo" rev-parse --verify "$checkpoint^{commit}" 2>/dev/null || :) == "$checkpoint" ]] || fail 'checkpoint missing or rewritten'
 git -C "$repo" merge-base --is-ancestor "$checkpoint" "$head" || fail 'checkpoint not an ancestor of HEAD'

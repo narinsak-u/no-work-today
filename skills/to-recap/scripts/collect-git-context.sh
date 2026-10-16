@@ -23,10 +23,18 @@ if [[ $(git -C "$repo" rev-parse --is-shallow-repository) == true ]]; then
   echo 'shallow history: cannot verify the boundary' >&2; exit 1
 fi
 branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || {
-  echo 'detached HEAD or unborn branch' >&2; exit 1;
+  echo 'detached HEAD' >&2; exit 1;
 }
 head=$(git -C "$repo" rev-parse --verify HEAD^{commit} 2>/dev/null) || {
-  echo 'empty repository: no commits' >&2; exit 1;
+  if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch" ||
+     [[ -n $(git -C "$repo" rev-list --all --max-count=1) ]]; then
+    echo 'unborn branch with existing or unsafe history; preserve the recap' >&2; exit 1
+  fi
+  if [[ -n $checkpoint || ( -n $expected_head && $expected_head != none ) ]]; then
+    echo 'no commits: checkpoint or expected HEAD cannot be a commit' >&2; exit 1
+  fi
+  printf 'mode: empty\nbranch: %s\nhead: none\ncoverage_oldest: none\nolder_history: no\ntotal: 0\noffset: 0\nnext_offset: 0\nhas_more: no\n' "$branch"
+  exit 0
 }
 if [[ -n $expected_head && $head != "$expected_head" ]]; then
   echo 'HEAD changed during collection; discard the candidate recap' >&2; exit 1
