@@ -38,7 +38,8 @@ initial_inline="$(awk '{printf "%s`%s` — selected commit", separator, $0; sepa
 cat > "$fixture/initial-unsigned" <<DOC
 # Project Recap
 ## Scope
-- **Committed range:** through $initial_head.
+- **Committed range:** Initial window: `$initial_stale_head` through `$initial_head`, inclusive.
+- **Older history:** None; all reachable commits covered
 ## 2026-10-12 — Initial history
 - **Category:** testing
 - **Status:** Completed
@@ -71,6 +72,72 @@ initial_hash="$( (sha256sum "$fixture/initial-unsigned" 2>/dev/null || shasum -a
 awk -v hash="$initial_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
   "$fixture/initial-unsigned" > "$fixture/initial-valid-recap"
 bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-valid-recap" "$initial_selected" "$initial_head" INITIAL
+initial_digest="$(git -C "$initial_repo" hash-object "$fixture/initial-valid-recap")"
+bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-valid-recap" "$initial_selected" "$initial_head" INITIAL
+[[ "$(git -C "$initial_repo" hash-object "$fixture/initial-valid-recap")" == "$initial_digest" ]] || exit 1
+
+# A first recap of a long history exposes the inclusive oldest represented
+# commit and explicitly excludes everything older than the selected 100.
+long_selected="$fixture/long-initial-selected"
+git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
+  awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}' > "$long_selected"
+long_inline="$(awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "}' "$long_selected")"
+cat > "$fixture/long-initial-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Committed range:** Initial window: \`$oldest\` through \`$head\`, inclusive.
+- **Older history:** Outside initial coverage
+## 2026-10-12 — Initial history
+- **Category:** testing
+- **Status:** Completed
+- **What / why:** Captured only the newest 100 commits.
+<details>
+<summary>Technical details and commit evidence</summary>
+- **Important files:** none
+- **Commits:** $long_inline
+- **Verification:** not run
+</details>
+- **Impact:** Initial history captured.
+## Current Point
+- **HEAD:** \`$head\` on \`$branch\`
+- **Recap checkpoint:** \`$head\`
+- **Pending committed history:** None
+- **Committed work:** Only the initial window was captured.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** Inspect older history separately if needed.
+<!-- recap-state
+branch: $branch
+last_commit: $head
+last_updated: 2026-10-12
+history_head: $head
+pending_commits: none
+-->
+DOC
+sign_initial() {
+  local digest
+  digest="$( (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | awk 'NR==1 {print $1}')"
+  awk -v hash="$digest" '/^-->$/ {print "output_sha256: " hash} {print}' "$1" > "$2"
+}
+sign_initial "$fixture/long-initial-unsigned" "$fixture/long-initial-recap"
+bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/long-initial-recap" "$long_selected" "$head" INITIAL
+for case in wrong_boundary wrong_older missing_older; do
+  case "$case" in
+    wrong_boundary) awk -v wrong="$initial" '/^- \*\*Committed range:\*\*/ {sub(/`[0-9a-f]+`/, "`" wrong "`")} {print}' "$fixture/long-initial-unsigned" > "$fixture/initial-tampered" ;;
+    wrong_older) awk '/^- \*\*Older history:\*\*/ {$0="- **Older history:** None; all reachable commits covered"} {print}' "$fixture/long-initial-unsigned" > "$fixture/initial-tampered" ;;
+    missing_older) awk '!/^- \*\*Older history:\*\*/' "$fixture/long-initial-unsigned" > "$fixture/initial-tampered" ;;
+  esac
+  sign_initial "$fixture/initial-tampered" "$fixture/initial-tampered-signed"
+  if bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/initial-tampered-signed" "$long_selected" "$head" INITIAL >/dev/null 2>&1; then
+    echo "Validator accepted $case in a signed initial recap" >&2; exit 1
+  fi
+done
+awk '/^- \*\*Older history:\*\*/ {$0="- **Older history:** Outside initial coverage"} {print}' \
+  "$fixture/initial-unsigned" > "$fixture/initial-tampered"
+sign_initial "$fixture/initial-tampered" "$fixture/initial-tampered-signed"
+if bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-tampered-signed" "$initial_selected" "$initial_head" INITIAL >/dev/null 2>&1; then
+  echo 'Validator accepted excluded older history when all commits were covered' >&2; exit 1
+fi
 awk -v stale="$initial_stale_head" '
   /^history_head: / {print "history_head: " stale; next}
   /^output_sha256: / {next}
