@@ -265,7 +265,7 @@ reject() {
     printf 'Backlog validator accepted %s\n' "$1" >&2
     exit 1
   fi
-  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|live-client-credential|quoted-client-credential|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret' "$fixture/validation.stderr"; then
+  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|live-client-credential|quoted-client-credential|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret|backlogged-secret-credential' "$fixture/validation.stderr"; then
     printf 'Backlog validator disclosed a suspected credential for %s\n' "$1" >&2
     exit 1
   fi
@@ -441,6 +441,8 @@ invalid 's|Payment capture failure in src/payments.go.|DB_PASSWORD=[REDACTED]; A
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=<redacted> and DB_PASSWORD name|' 'angle-bracket redaction and name' accept
 invalid 's|Payment capture failure in src/payments.go.|Connect to https://service@api.example.test/tasks|' 'URL without password' accept
 invalid 's|Payment capture failure in src/payments.go.|client_secret=[REDACTED] and OAUTH_CLIENT_SECRET="<redacted>"|' 'safe client secret placeholders' accept
+invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer backlogged-secret-credential|' 'Bearer authorization credential'
+invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer [REDACTED]|' 'redacted Bearer authorization credential' accept
 cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 printf 'Backlog shell scenarios passed.\n'
