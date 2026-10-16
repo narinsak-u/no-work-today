@@ -15,6 +15,8 @@ printf 'TODO: dependency task\n' > "$root/node_modules/library.js"
 printf 'TODO: built task\n' > "$root/dist/output.js"
 printf 'TODO: generated task\n' > "$root/generated/schema.go"
 printf 'TODO: fake embedded binary\000more data\n' > "$root/src/binary.dat"
+printf 'TODO: oversized task\n' > "$root/src/oversized.dat"
+dd if=/dev/zero bs=1024 count=513 2>/dev/null >> "$root/src/oversized.dat"
 printf 'TODO: skip generated backlog\n' > "$root/docs/backlog.md"
 printf 'API_KEY=live-secret # TODO rotate\n' > "$root/.env"
 printf 'password=live-secret # TODO rotate\n' > "$root/src/config.yml"
@@ -41,11 +43,25 @@ cp "$root/src/credential.go" "$fixture/credential-before"
 cp "$root/src/database.go" "$fixture/database-before"
 
 candidates="$(bash "$skill/scripts/find-todos.sh" "$root")"
+scan_path="$fixture/scan-path"
+mkdir -p "$scan_path"
+real_wc="$(command -v wc)"
+cat > "$scan_path/wc" <<'WC'
+#!/usr/bin/env bash
+printf 'wc\n' >> "$WC_MARKER"
+exec "$REAL_WC" "$@"
+WC
+chmod +x "$scan_path/wc"
+WC_MARKER="$fixture/wc-calls" REAL_WC="$real_wc" PATH="$scan_path:$PATH" \
+  bash "$skill/scripts/find-todos.sh" "$root" > "$fixture/wc-scan"
+[[ ! -s "$fixture/wc-calls" ]] || exit 1
+[[ "$(cat "$fixture/wc-scan")" == "$candidates" ]] || exit 1
 [[ "$candidates" == *'src/payments.go:1:'*'Add retries'* ]] || exit 1
 [[ "$candidates" == *'src/order file.go:1:'*'Preserve order'* ]] || exit 1
 [[ "$candidates" == *'notes.txt:1:'*'migration blockers'* ]] || exit 1
 [[ "$candidates" == *'src/trivial.go:1:'*'Remove debug log'* ]] || exit 1
 [[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* && "$candidates" != *'live-secret'* ]] || exit 1
+[[ "$candidates" != *'oversized.dat'* ]] || exit 1
 [[ "$candidates" == *'src/credential.go:1:'*'sensitive TODO'* && "$candidates" == *'src/database.go:1:'*'sensitive TODO'* && "$candidates" == *'src/encoded-url.go:1:'*'sensitive TODO'* && "$candidates" == *'src/access-token.go:1:'*'sensitive TODO'* ]] || exit 1
 for file in stripe-token.go github-token.go github-pat.go; do
   [[ "$candidates" == *"src/$file:1:"*'sensitive TODO'* ]] || exit 1
