@@ -21,15 +21,14 @@ git --no-optional-locks -C "$root" -c core.quotePath=false status --short --untr
 # File lists and diffstat are leads, not evidence of completed work. Avoid
 # external diff drivers and textconv; summarize only metadata, never file contents.
 show_diff() {
-  local label="$1" stage="$2"
-  local -a options=()
-  if [[ "$stage" == staged ]]; then options=(--cached); fi
+  local label="$1" stage="$2" diff_mode=
+  if [[ "$stage" == staged ]]; then diff_mode=--cached; fi
   printf '%s_CHANGED_FILES (at most 40 paths):\n' "$label"
-  git --no-optional-locks -C "$root" -c core.quotePath=true diff --no-ext-diff --no-textconv "${options[@]}" --name-status -- |
+  git --no-optional-locks -C "$root" -c core.quotePath=true diff --no-ext-diff --no-textconv ${diff_mode:+"$diff_mode"} --name-status -- |
     awk -v stage="$stage" 'NR <= 40 { print "CHANGE=" $0 }
       END { if (NR > 40) printf "... %d additional %s changed files omitted\n", NR - 40, stage }'
   printf '%s_DIFF_STAT (at most 40 files; no file contents):\n' "$label"
-  git --no-optional-locks -C "$root" -c core.quotePath=true diff --no-ext-diff --no-textconv "${options[@]}" --stat --stat-count=40 --stat-width=120 --
+  git --no-optional-locks -C "$root" -c core.quotePath=true diff --no-ext-diff --no-textconv ${diff_mode:+"$diff_mode"} --stat --stat-count=40 --stat-width=120 --
 }
 show_diff STAGED staged
 show_diff UNSTAGED unstaged
