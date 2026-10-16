@@ -176,6 +176,20 @@ if [[ -n $selected ]]; then
     cmp -s "$selected" "$expected_ids" ||
       fail 'selected history does not cover the complete initial window'
     [[ $checkpoint == "$head" ]] || fail 'initial checkpoint must cover selected HEAD'
+    oldest=$(awk 'NR==1 {print; exit}' "$expected_ids")
+    if [[ $older == yes ]]; then
+      older_claim='- **Older history:** Outside initial coverage'
+    else
+      older_claim='- **Older history:** None; all reachable commits covered'
+    fi
+    awk -v range="- **Committed range:** Initial window: \`$oldest\` through \`$head\`, inclusive." \
+        -v older="$older_claim" '
+      /^## Scope$/ {in_scope=1; next}
+      /^## / {in_scope=0}
+      in_scope && /^- \*\*Committed range:\*\*/ {ranges++; if ($0 != range) bad=1}
+      in_scope && /^- \*\*Older history:\*\*/ {older_claims++; if ($0 != older) bad=1}
+      END {exit (bad || ranges != 1 || older_claims != 1)}
+    ' <(sed 's/\r$//' "$recap") || fail 'initial coverage boundary or older-history claim disagrees with selected history'
     draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
     [[ $draft_history_head == "$head" ]] || fail 'initial history head does not match captured HEAD'
     pending=no
