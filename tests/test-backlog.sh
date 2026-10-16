@@ -9,6 +9,7 @@ mkdir -p "$root/src" "$root/vendor" "$root/node_modules" "$root/dist" "$root/gen
 printf '// TODO: Add retries to failed payment capture\n' > "$root/src/payments.go"
 printf '// FIXME: Preserve order during replay\n' > "$root/src/order file.go"
 printf 'WIP: document migration blockers\n' > "$root/notes.txt"
+printf '// TODO: Remove debug log\n' > "$root/src/trivial.go"
 printf 'TODO: vendored task\n' > "$root/vendor/dependency.go"
 printf 'TODO: dependency task\n' > "$root/node_modules/library.js"
 printf 'TODO: built task\n' > "$root/dist/output.js"
@@ -39,6 +40,7 @@ candidates="$(bash "$skill/scripts/find-todos.sh" "$root")"
 [[ "$candidates" == *'src/payments.go:1:'*'Add retries'* ]] || exit 1
 [[ "$candidates" == *'src/order file.go:1:'*'Preserve order'* ]] || exit 1
 [[ "$candidates" == *'notes.txt:1:'*'migration blockers'* ]] || exit 1
+[[ "$candidates" == *'src/trivial.go:1:'*'Remove debug log'* ]] || exit 1
 [[ "$candidates" != *'vendor/'* && "$candidates" != *'node_modules/'* && "$candidates" != *'dist/'* && "$candidates" != *'generated/'* && "$candidates" != *'binary.dat'* && "$candidates" != *'docs/backlog.md'* && "$candidates" != *'live-secret'* ]] || exit 1
 [[ "$candidates" == *'src/credential.go:1:'*'sensitive TODO'* && "$candidates" == *'src/database.go:1:'*'sensitive TODO'* && "$candidates" == *'src/encoded-url.go:1:'*'sensitive TODO'* && "$candidates" == *'src/access-token.go:1:'*'sensitive TODO'* ]] || exit 1
 for file in stripe-token.go github-token.go github-pat.go; do
@@ -140,15 +142,8 @@ cat > "$root/docs/backlog.md" <<'DOC'
 - **Context:** Payment capture failure in src/payments.go.
 - **Tasks:**
   - [ ] Handle retryable errors.
-- **Related:** None
 - **Files:** src/payments.go
-- **Depends on:** None
-- **Blocked by:** None
-- **Completion:** Not completed
-  - **Completed on:** —
-  - **Completion commit:** —
-  - **Completion evidence:** —
-  - **Completion notes:** —
+
 
 ## Blocked
 
@@ -162,15 +157,22 @@ cat > "$root/docs/backlog.md" <<'DOC'
 - **Context:** An audit trail was required.
 - **Tasks:**
   - [x] Ship audit trail.
-- **Related:** None
 - **Files:** src/audit.go
-- **Depends on:** None
-- **Blocked by:** None
 - **Completion:** Completed
   - **Completed on:** 2026-10-01
   - **Completion commit:** abc1234
-  - **Completion evidence:** Commit abc1234
+  - **Completion evidence:** Commit abc1234 contains the verified audit trail diff.
   - **Completion notes:** Released audit trail.
+
+### BL-005 — Publish deployment checklist
+- **Status:** Done
+- **Priority:** Low
+- **Context:** Operators needed a release checklist.
+- **Tasks:**
+  - [x] Publish the deployment checklist.
+- **Completion:** Completed
+  - **Completed on:** 2026-10-02
+  - **Completion evidence:** Verified diff docs/deploy.md added the release checklist.
 
 <!-- skill-state
 output_sha256: FINGERPRINT
@@ -189,13 +191,17 @@ cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 bash "$fixture/standalone/to-backlog/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 cmp -s "$fixture/valid.md" "$root/docs/backlog.md"
+bash "$fixture/standalone/to-backlog/scripts/validate-backlog.sh" "$fixture/valid.md" "$fixture/valid.md"
+[[ "$(grep -c '^### BL-' "$fixture/valid.md")" -eq 3 ]] || exit 1
+[[ "$(grep -c '^  - \*\*Completion evidence:\*\*' "$fixture/valid.md")" -eq 2 ]] || exit 1
+! grep -Fq 'Remove debug log' "$fixture/valid.md" || exit 1
 
 reject() {
   if bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md" > /dev/null 2> "$fixture/validation.stderr"; then
     printf 'Backlog validator accepted %s\n' "$1" >&2
     exit 1
   fi
-  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret' "$fixture/validation.stderr"; then
+  if grep -Eqi 'top-secret-credential|connection-secret|live-secret|live-client-credential|quoted-client-credential|sk_live_12345678x|ghp_12345678x|github_pat_12345678x|actually secret value|still-secret|production-secret' "$fixture/validation.stderr"; then
     printf 'Backlog validator disclosed a suspected credential for %s\n' "$1" >&2
     exit 1
   fi
@@ -225,7 +231,119 @@ invalid 's/BL-002/BL-001/' 'duplicate IDs'
 invalid 's/\*\*Status:\*\* Todo/\*\*Status:\*\* Queued/' 'invalid status'
 invalid 's/\*\*Priority:\*\* High/\*\*Priority:\*\* Urgent/' 'invalid priority'
 invalid 's/\*\*Status:\*\* Todo/\*\*Status:\*\* Done/' 'section/status mismatch'
-invalid 's/\*\*Completion evidence:\*\* Commit abc1234/\*\*Completion evidence:\*\* —/' 'lost completion evidence'
+invalid 's/\*\*Completion evidence:\*\* Commit abc1234 contains the verified audit trail diff\./\*\*Completion evidence:\*\* —/' 'lost completion evidence'
+invalid '/^- \*\*Context:\*\* Payment capture failure in src\/payments.go\.$/d' 'missing evidence-backed Context'
+invalid '/^- \*\*Tasks:\*\*$/d' 'missing finite Tasks field'
+invalid 's/\*\*Completion evidence:\*\* Commit abc1234 contains the verified audit trail diff\./\*\*Completion evidence:\*\* Not run/' 'unverified completion evidence'
+# Re-sign changed documents before testing cross-version preservation:
+# a fingerprint proves ownership, not continuity of IDs or completed records.
+sign_update() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest="$(sed '/^output_sha256: /s/^output_sha256: .*//' "$1" | sha256sum)"
+  else
+    digest="$(sed '/^output_sha256: /s/^output_sha256: .*//' "$1" | shasum -a 256)"
+  fi
+  digest="${digest%% *}"
+  sed "s/^output_sha256: .*/output_sha256: $digest/" "$1" > "$root/docs/backlog.md"
+}
+reject_update() {
+  if bash "$fixture/standalone/to-backlog/scripts/validate-backlog.sh" "$root/docs/backlog.md" "${2:-$fixture/valid.md}" > /dev/null 2> "$fixture/update.stderr"; then
+    printf 'Backlog update validator accepted %s\n' "$1" >&2
+    exit 1
+  fi
+}
+awk '/^## Todo$/{print "## Blocked";next} /^## Blocked$/{print "## Todo";next} {print}' "$fixture/valid.md" |
+  sed 's/\*\*Status:\*\* Todo/\*\*Status:\*\* Blocked/' > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+reject 'Blocked item without blocker'
+sed 's/BL-002/BL-004/' "$fixture/valid.md" > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
+reject_update 'renumbered ID despite a valid new fingerprint'
+sed '/^### BL-001 — Ship audit trail/,/^<!-- skill-state/{ /^<!-- skill-state/!d; }' "$fixture/valid.md" > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
+reject_update 'removed completed ID despite a valid new fingerprint'
+sed '/^### BL-002 — Improve capture/,/^## Blocked/{ /^## Blocked/!d; }' "$fixture/valid.md" > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
+reject_update 'removed unfinished ID despite a valid new fingerprint'
+sed 's/Commit abc1234 contains the verified audit trail diff\./Unrelated purported evidence./' "$fixture/valid.md" > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+reject_update 'replaced prior completion evidence'
+sed 's/\*\*Completion notes:\*\* Released audit trail\./\*\*Completion notes:\*\* —/' "$fixture/valid.md" > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+reject_update 'removed prior completion notes'
+sed 's/Verified diff docs\/deploy.md added the release checklist\./Unrelated purported evidence./' "$fixture/valid.md" > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+reject_update 'replaced second completed record'
+cat > "$fixture/unsigned-update.md" <<'DOC'
+# Project Backlog
+
+## In Progress
+
+### BL-002 — Retry failed payment capture
+- **Status:** In Progress
+- **Priority:** High
+- **Context:** Payment capture failure in src/payments.go; active work is confirmed in the staged changes.
+- **Tasks:**
+  - [ ] Handle retryable errors.
+- **Files:** src/payments.go
+
+## Todo
+
+### BL-003 — Address replay ordering
+- **Status:** Todo
+- **Priority:** Low
+- **Context:** src/order file.go marks order loss during replay.
+- **Tasks:**
+  - [ ] Preserve ordering in replay.
+
+## Blocked
+
+## Needs Review
+
+## Done
+
+### BL-001 — Ship audit trail
+- **Status:** Done
+- **Priority:** Low
+- **Context:** An audit trail was required.
+- **Tasks:**
+  - [x] Ship audit trail.
+- **Files:** src/audit.go
+- **Completion:** Completed
+  - **Completed on:** 2026-10-01
+  - **Completion commit:** abc1234
+  - **Completion evidence:** Commit abc1234 contains the verified audit trail diff.
+  - **Completion notes:** Released audit trail.
+
+### BL-005 — Publish deployment checklist
+- **Status:** Done
+- **Priority:** Low
+- **Context:** Operators needed a release checklist.
+- **Tasks:**
+  - [x] Publish the deployment checklist.
+- **Completion:** Completed
+  - **Completed on:** 2026-10-02
+  - **Completion evidence:** Verified diff docs/deploy.md added the release checklist.
+
+<!-- skill-state
+output_sha256: FINGERPRINT
+-->
+DOC
+sign_update "$fixture/unsigned-update.md"
+bash "$fixture/standalone/to-backlog/scripts/validate-backlog.sh" "$root/docs/backlog.md" "$fixture/valid.md"
+[[ "$(grep -c '^### BL-' "$root/docs/backlog.md")" -eq 4 ]] || exit 1
+[[ "$(grep -c '^  - \*\*Completion evidence:\*\*' "$root/docs/backlog.md")" -eq 2 ]] || exit 1
+cp "$root/docs/backlog.md" "$fixture/current-update.md"
+sed -e 's/BL-002/BL-TMP/g' -e 's/BL-003/BL-002/g' -e 's/BL-TMP/BL-003/g' "$fixture/current-update.md" > "$fixture/unsigned-update.md"
+sign_update "$fixture/unsigned-update.md"
+bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
+reject_update 'swapped existing IDs despite unchanged set' "$fixture/current-update.md"
+cp "$fixture/current-update.md" "$root/docs/backlog.md"
+sed '/^<!-- skill-state$/,/^-->$/d' "$fixture/valid.md" > "$fixture/legacy-before.md"
+bash "$fixture/standalone/to-backlog/scripts/validate-backlog.sh" "$root/docs/backlog.md" "$fixture/legacy-before.md"
 invalid 's|Payment capture failure in src/payments.go.|API_KEY=live-secret|' 'secret in backlog Context'
 for token in sk_live_12345678x ghp_12345678x github_pat_12345678x; do
   invalid "s|Payment capture failure in src/payments.go.|Replace $token|" "standalone credential $token"
