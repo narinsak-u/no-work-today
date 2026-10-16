@@ -17,13 +17,71 @@ trap 'rm -rf "$expected_dir"' EXIT
 fixture_expected_initial="$expected_dir/initial"
 fixture_expected_history="$expected_dir/history"
 fixture_expected_batch="$expected_dir/batch"
+legacy_prior=0
+old_prefix_lines=0
+if [[ -n $source_recap && $source_recap != INITIAL && -f $source_recap ]] &&
+   ! grep -q '^output_sha256:' "$source_recap"; then
+  bash "$(dirname "$0")/validate-legacy-recap.sh" "$repo" "$source_recap" "$expected_head" >/dev/null ||
+    fail 'unsafe legacy source; preserve existing recap'
+  legacy_prior=1
+fi
 bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$recap" "$expected_head" >/dev/null || fail 'unsafe state or checkpoint'
-awk '
+# The marker is written only on adoption and carried forward unchanged. It
+# identifies exactly which old entries retain their original bytes and shape.
+legacy_marker=$(awk '{sub(/\r$/, "")} /^legacy_prefix: / {print substr($0,16)}' "$recap")
+if grep -q '^legacy_prefix:' "$recap" && [[ -z $legacy_marker ]]; then
+  fail 'invalid legacy prefix marker'
+fi
+if [[ -n $legacy_marker ]]; then
+  [[ $legacy_marker =~ ^[1-9][0-9]*\ [0-9a-f]{64}$ ]] || fail 'invalid legacy prefix marker'
+  [[ $(awk '
+    {sub(/\r$/, "")}
+    /^<!-- recap-state$/ {inside=1}
+    /^-->$/ {inside=0}
+    /^legacy_prefix:/ {n++; if (!inside) bad=1}
+    END {print n+0, bad+0}
+  ' "$recap") == '1 0' ]] || fail 'duplicate or misplaced legacy prefix marker'
+  legacy_count=${legacy_marker%% *}
+  old_prefix_lines=$(awk -v total="$legacy_count" '
+    {sub(/\r$/, "")}
+    /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {
+      if (++n>total) {print NR-1; found=1; exit}
+    }
+    /^## Current Point$/ {if (n==total) {print NR-1; found=1}; exit}
+    END {if (!found) exit 1}
+  ' "$recap") || fail 'legacy entry boundary missing'
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual_prefix=$(sed -n "1,${old_prefix_lines}p" "$recap" | sha256sum | awk '{print $1}')
+  else
+    actual_prefix=$(sed -n "1,${old_prefix_lines}p" "$recap" | shasum -a 256 | awk '{print $1}')
+  fi
+  [[ $legacy_marker == "$legacy_count $actual_prefix" ]] || fail 'legacy entries changed'
+elif (( legacy_prior )); then
+  fail 'adopted legacy recap lacks preservation marker'
+fi
+if [[ $source_recap == INITIAL && -n $legacy_marker ]]; then
+  fail 'initial recap cannot have legacy entries'
+fi
+if [[ -n $source_recap && $source_recap != INITIAL && ! -f $source_recap ]]; then
+  fail 'original recap missing'
+fi
+if [[ -n $source_recap && $source_recap != INITIAL && -f $source_recap && $legacy_prior == 0 ]]; then
+  prior_marker=$(awk '{sub(/\r$/, "")} /^legacy_prefix: / {print substr($0,16)}' "$source_recap")
+  [[ $legacy_marker == "$prior_marker" ]] || fail 'legacy boundary changed'
+fi
+if (( legacy_prior )); then
+  source_count=$(awk '/^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {n++} END {print n+0}' "$source_recap")
+  [[ $legacy_count == "$source_count" ]] || fail 'legacy entry count changed'
+fi
+awk -v old_prefix_lines="$old_prefix_lines" '
   {sub(/\r$/, "")}
   /^# Project Recap$/ {title++}
   /^## Scope$/ {scope++}
   /^## Current Point$/ {current++; in_entry=0}
-  /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {entries++; in_entry=1; entry_notes=0}
+  /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {
+    if (NR > old_prefix_lines) {entries++; in_entry=1; entry_notes=0}
+    else in_entry=0
+  }
   in_entry && /^- \*\*Category:\*\* / {categories++;
     if ($0 !~ /^- \*\*Category:\*\* (features|fixes|refactors|infrastructure|testing|documentation|security|performance)$/) invalid=1}
   in_entry && /^- \*\*Status:\*\* / {statuses++;
@@ -40,8 +98,16 @@ awk '
   /^- \*\*Committed work:\*\* / {committed++}
   /^- \*\*Uncommitted work:\*\* / {uncommitted++}
   /^- \*\*Next safe point:\*\* / {safe_points++}
-  END {if (invalid || title!=1 || scope!=1 || current!=1 || entries<1 || categories!=entries || statuses!=entries || whys!=entries || files!=entries || commits!=entries || impacts!=entries || verifications!=entries || heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 || uncommitted!=1 || safe_points!=1) exit 1}
-' "$recap" || fail 'required sections or work-entry fields missing'
+  END {
+    empty=(checkpoint=="none")
+    if (invalid || title!=1 || scope!=1 || current!=1 ||
+        (empty ? entries!=0 : entries<1) ||
+        categories!=entries || statuses!=entries || whys!=entries || files!=entries ||
+        commits!=entries || impacts!=entries || verifications!=entries ||
+        heads!=1 || checkpoints!=1 || pending!=1 || committed!=1 ||
+        uncommitted!=1 || safe_points!=1) exit 1
+  }
+' checkpoint="$(awk '/^last_commit: / {print $2}' "$recap")" "$recap" || fail 'required sections or work-entry fields missing'
 if LC_ALL=C awk '
   function placeholder(value, quote, tail) {
     if (value ~ /^[`"\047]/) {
@@ -97,6 +163,31 @@ if LC_ALL=C awk '
 ' "$recap"; then
   fail 'possible secret value'
 fi
+if [[ $(awk '/^last_commit: / {print $2}' "$recap") == none ]]; then
+  branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
+  grep -Fx -- '- **Committed range:** No commits yet; this Git repository has no committed history.' "$recap" >/dev/null ||
+    fail 'empty recap must disclose no committed history'
+  grep -Fx -- "- **HEAD:** No commits yet on \`$branch\`" "$recap" >/dev/null ||
+    fail 'empty Current Point HEAD disagrees with Git'
+  grep -Fx -- '- **Recap checkpoint:** None (no commits yet)' "$recap" >/dev/null ||
+    fail 'empty Current Point must not invent a checkpoint'
+  grep -Fx -- '- **Pending committed history:** None' "$recap" >/dev/null ||
+    fail 'empty history cannot have pending commits'
+  grep -Fx -- '- **Committed work:** None; no commits exist.' "$recap" >/dev/null ||
+    fail 'empty recap must not claim committed work'
+  if [[ -n $selected ]]; then
+    [[ -f $selected && ! -s $selected ]] || fail 'empty history cannot select commits'
+    [[ $source_recap == INITIAL || -f $source_recap ]] || fail 'original recap missing'
+    if [[ $source_recap != INITIAL ]]; then
+      bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" none >/dev/null ||
+        fail 'original recap boundary unsafe'
+      cmp -s <(sed '/^## Current Point/,$d' "$source_recap") <(sed '/^## Current Point/,$d' "$recap") ||
+        fail 'previous recap scope changed'
+    fi
+  fi
+  printf 'recap valid: %s\n' "$recap"
+  exit 0
+fi
 if [[ -n $selected ]]; then
   [[ -f $selected ]] || fail 'commit list missing'
   # Selected full IDs must occur exactly once in dated entries, inside their
@@ -134,7 +225,21 @@ if [[ -n $selected ]]; then
   checkpoint=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$recap")
   [[ -z $last || $last == "$checkpoint" ]] || fail 'checkpoint does not match final selected commit'
   head=$(git -C "$repo" rev-parse HEAD)
-  if [[ $source_recap == INITIAL ]]; then
+  empty_source=no
+  if [[ $source_recap != INITIAL && -f $source_recap &&
+        $(awk '/^last_commit: / {print $2}' "$source_recap") == none ]]; then
+    empty_source=yes
+    bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" --from-empty >/dev/null ||
+      fail 'original empty recap boundary unsafe'
+    prior_date=$(awk '/^last_updated: / {print $2}' "$source_recap")
+    prior_work=$(awk '/^- \*\*Uncommitted work:\*\* / {print substr($0,25)}' "$source_recap")
+    [[ $(awk '/^- \*\*Uncommitted work:\*\* / {n++} END {print n+0}' "$source_recap") == 1 &&
+       -n $prior_work ]] || fail 'original empty recap lacks uncommitted-work context'
+    prior_branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || fail 'branch changed'
+    grep -Fx -- "- **Before first commit:** $prior_date on \`$prior_branch\`: no commits existed; earlier uncommitted work: $prior_work" "$recap" >/dev/null ||
+      fail 'initial recap dropped previous empty-state work'
+  fi
+  if [[ $source_recap == INITIAL || $empty_source == yes ]]; then
     expected_ids="$fixture_expected_initial"
     git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
       awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}' > "$expected_ids"
@@ -143,40 +248,85 @@ if [[ -n $selected ]]; then
     cmp -s "$selected" "$expected_ids" ||
       fail 'selected history does not cover the complete initial window'
     [[ $checkpoint == "$head" ]] || fail 'initial checkpoint must cover selected HEAD'
+    oldest=$(awk 'NR==1 {print; exit}' "$expected_ids")
+    if [[ $older == yes ]]; then
+      older_claim='- **Older history:** Outside initial coverage'
+    else
+      older_claim='- **Older history:** None; all reachable commits covered'
+    fi
+    awk -v range="- **Committed range:** Initial window: \`$oldest\` through \`$head\`, inclusive." \
+        -v older="$older_claim" '
+      /^## Scope$/ {in_scope=1; next}
+      /^## / {in_scope=0}
+      in_scope && /^- \*\*Committed range:\*\*/ {ranges++; if ($0 != range) bad=1}
+      in_scope && /^- \*\*Older history:\*\*/ {older_claims++; if ($0 != older) bad=1}
+      END {exit (bad || ranges != 1 || older_claims != 1)}
+    ' <(sed 's/\r$//' "$recap") || fail 'initial coverage boundary or older-history claim disagrees with selected history'
     draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
     [[ $draft_history_head == "$head" ]] || fail 'initial history head does not match captured HEAD'
     pending=no
   else
     [[ -f $source_recap ]] || fail 'original recap missing'
-    if grep -q '^output_sha256: ' "$source_recap"; then
-      bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" >/dev/null ||
+    recovery_boundary=''
+    if grep -q '^output_sha256:' "$source_recap"; then
+      source_state=$(bash "$(dirname "$0")/validate-checkpoint.sh" "$repo" "$source_recap" "$head" --recover) ||
         fail 'original recap boundary unsafe'
+      recovery_boundary=$(printf '%s\n' "$source_state" | awk '/^recovery_boundary: / {print $2}')
     fi
     prefix_bytes=$(sed '/^## Current Point/,$d' "$source_recap" | wc -c)
     cmp -s -n "$prefix_bytes" <(sed '/^## Current Point/,$d' "$source_recap") <(sed '/^## Current Point/,$d' "$recap") ||
       fail 'previous recap entries changed'
+    if (( legacy_prior )); then
+      # Old entries keep their bytes and may predate the collapsed-details
+      # format. They must not already claim any newly selected commit.
+      awk '
+        FILENAME==ARGV[1] {want[$0]=1; next}
+        /^## Current Point$/ {exit}
+        /^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / {entry=1}
+        entry {for (id in want) if (index($0, id)) repeated=1}
+        END {exit !repeated}
+      ' "$selected" "$source_recap" && fail 'selected commit already represented in legacy entries'
+    fi
     base=$(awk '{sub(/\r$/, "")} /^last_commit: / {print $2}' "$source_recap")
-    [[ $base =~ ^[0-9a-f]{40,64}$ ]] &&
-      git -C "$repo" merge-base --is-ancestor "$base" "$head" ||
-      fail 'original checkpoint not an ancestor'
-    if grep -q '^history_head: ' "$source_recap"; then
-      history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$source_recap")
-      pending_ids=$(awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$source_recap")
-      [[ -n $pending_ids ]] || fail 'original pending queue missing'
-      if [[ $pending_ids == none ]]; then
-        git -C "$repo" rev-list --topo-order --reverse "$history_head..$head" > "$fixture_expected_history"
-      else
-        awk -v pending="$pending_ids" '
-          BEGIN {split(pending, queue, " "); for (i in queue) want[queue[i]]=1}
-          FILENAME==ARGV[1] {want[$0]=1; next}
-          want[$0] {print}
-        ' <(git -C "$repo" rev-list "$history_head..$head") <(git -C "$repo" rev-list --topo-order --reverse "$head") > "$fixture_expected_history"
-      fi
+    if [[ -n $recovery_boundary ]]; then
+      # The source is an authenticated historical record, not an ancestor of
+      # this rewritten graph. Its unique documented common ancestor is the
+      # first safe continuation boundary; leave every old entry byte-for-byte.
+      git -C "$repo" rev-list --topo-order --reverse "$recovery_boundary..$head" > "$fixture_expected_history"
       expected_full="$fixture_expected_history"
+      [[ -s $expected_full ]] || fail 'no new history after recovery boundary'
     else
-      grep -q '^pending_commits: ' "$source_recap" && fail 'original pending queue lacks history head'
-      expected_full="$fixture_expected_history"
-      git -C "$repo" rev-list --topo-order --reverse "$base..$head" > "$expected_full"
+      [[ $base =~ ^[0-9a-f]{40,64}$ ]] &&
+        git -C "$repo" merge-base --is-ancestor "$base" "$head" ||
+        fail 'original checkpoint not an ancestor'
+      if grep -q '^history_head: ' "$source_recap"; then
+        history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$source_recap")
+        source_queue="$expected_dir/source-queue"
+        new_ids="$expected_dir/new-ids"
+        awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$source_recap" |
+          tr ' ' '\n' > "$source_queue"
+        [[ -s $source_queue ]] || fail 'original pending queue missing'
+        git -C "$repo" rev-list "$history_head..$head" > "$new_ids"
+        if [[ $(awk 'NR==1 {print; exit}' "$source_queue") == none ]]; then
+          git -C "$repo" rev-list --topo-order --reverse "$head" |
+            awk 'FILENAME==ARGV[1] {want[$0]=1; next} want[$0] {print}' "$new_ids" - > "$fixture_expected_history"
+        else
+          git -C "$repo" rev-list --topo-order --reverse "$head" |
+            awk 'FILENAME==ARGV[1] || FILENAME==ARGV[2] {want[$0]=1; next} want[$0] {print}' \
+              "$source_queue" "$new_ids" - > "$fixture_expected_history"
+        fi
+        expected_full="$fixture_expected_history"
+      else
+        grep -q '^pending_commits: ' "$source_recap" && fail 'original pending queue lacks history head'
+        expected_full="$fixture_expected_history"
+        git -C "$repo" rev-list --topo-order --reverse "$base..$head" > "$expected_full"
+      fi
+    fi
+    if (( selected_count == 0 )); then
+      [[ ! -s $expected_full ]] || fail 'selected history does not cover the oldest pending batch'
+      cmp -s "$recap" "$source_recap" || fail 'caught-up recap must remain unchanged'
+      printf 'recap valid: %s\n' "$recap"
+      exit 0
     fi
     expected_batch="$fixture_expected_batch"
     awk 'NR<=100' "$expected_full" > "$expected_batch"
@@ -189,11 +339,14 @@ if [[ -n $selected ]]; then
       pending=yes
       next_unrepresented=$(awk -v selected="$selected_count" 'NR==selected+1 {print; exit}' "$expected_full")
       draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
-      draft_pending=$(awk '{sub(/\r$/, "")} /^pending_commits: / {print substr($0,18)}' "$recap")
-      [[ $draft_history_head == "$head" && -n $draft_pending && $draft_pending != none ]] ||
+      draft_queue="$expected_dir/draft-queue"
+      awk '/^pending_commits: / {print substr($0,18)}' "$recap" |
+        tr ' ' '\n' > "$draft_queue"
+      [[ $draft_history_head == "$head" && -s $draft_queue ]] ||
         fail 'remaining history requires pinned pending queue'
-      expected_pending=$(awk -v selected="$selected_count" 'NR>selected {if (n) printf " "; printf "%s", $0; n++} END {if (n) printf "\n"}' "$expected_full")
-      [[ $draft_pending == "$expected_pending" ]] || fail 'pending queue does not match remaining history'
+      awk -v selected="$selected_count" 'NR>selected' "$expected_full" > "$expected_dir/remaining"
+      cmp -s "$draft_queue" "$expected_dir/remaining" ||
+        fail 'pending queue does not match remaining history'
     else
       draft_history_head=$(awk '{sub(/\r$/, "")} /^history_head: / {print $2}' "$recap")
       [[ $draft_history_head == "$head" ]] || fail 'history head does not match captured HEAD'

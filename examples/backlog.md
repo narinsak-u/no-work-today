@@ -8,23 +8,15 @@
 
 ## Todo
 
-### BL-001 — Add notebook export (fictional)
+### BL-001 — Export notes without losing attachments (fictional)
 
 - **Status:** Todo
 - **Priority:** Low
-- **Context:** The fictional Lantern Notes project has no verified export path in this example. The priority is conservative because no real impact evidence is available.
+- **Context:** In this fictional repository, the export action drops attachment links in `src/domain/notes.ts`; impact beyond the affected action has not been established.
 - **Tasks:**
-  - [ ] Verify the supported export format and destination from repository evidence.
-  - [ ] Implement an export path only after the format and acceptance criteria are confirmed.
-- **Related:** None
-- **Files:** [`src/domain/notes.ts` — fictional note model that may need export mapping; verify before editing]
-- **Depends on:** None
-- **Blocked by:** None
-- **Completion:** Not completed
-  - **Completed on:** —
-  - **Completion commit:** —
-  - **Completion evidence:** —
-  - **Completion notes:** —
+  - [ ] Preserve attachment references when serializing exported notes.
+  - [ ] Add an export test with an attached note.
+- **Files:** `src/domain/notes.ts` — fictional export mapping
 
 ## Blocked
 
@@ -32,23 +24,15 @@
 
 ## Needs Review
 
-### BL-002 — Choose search index retention policy (fictional)
+### BL-002 — Decide search index retention before cleanup (fictional)
 
 - **Status:** Needs Review
 - **Priority:** Low
-- **Context:** The fictional worker requires a retention policy, but the target repository and product requirements are unavailable in this example.
+- **Context:** In this fictional repository, `src/workers/index-refresh.ts` leaves expired entries in the index; the retention requirement is not documented, so deletion is not yet safe to scope.
 - **Tasks:**
-  - [ ] Confirm whether indexed note content may be retained and for how long.
-  - [ ] Record the decision before changing worker cleanup behavior.
-- **Related:** None
-- **Files:** [`src/workers/index-refresh.ts` — fictional worker boundary; verify before editing]
-- **Depends on:** None
-- **Blocked by:** None
-- **Completion:** Not completed
-  - **Completed on:** —
-  - **Completion commit:** —
-  - **Completion evidence:** —
-  - **Completion notes:** —
+  - [ ] Confirm the retention requirement with the product owner and record the decision.
+  - [ ] Scope the index cleanup using that requirement.
+- **Files:** `src/workers/index-refresh.ts` — fictional index refresh path
 
 ## Done
 
@@ -56,15 +40,7 @@
 
 - **Status:** Done
 - **Priority:** Low
-- **Context:** This completed item exists only to demonstrate preservation of a completion record in a fictional backlog.
+- **Context:** In this fictional repository, the setup instructions were missing a local test command.
 - **Tasks:**
-  - [x] Add fictional setup notes to the example overview.
-- **Related:** None
-- **Files:** [`examples/overview.md` — fictional documentation example]
-- **Depends on:** None
-- **Blocked by:** None
-- **Completion:** Completed
-  - **Completed on:** 2026-01-10
-  - **Completion commit:** `None — fictional example; no real commit hash is claimed`
-  - **Completion evidence:** `not run (fictional example)`
-  - **Completion notes:** This is illustrative only and does not claim a real completed task.
+  - [x] Add the local test command to the setup instructions.
+- **Completion evidence:** Fictional reviewed diff `docs/setup.md` adds the local test command and its expected output. No real repository work is claimed here.

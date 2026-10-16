@@ -142,12 +142,12 @@ rm -rf
 
 Skills must never automatically modify Git history.
 
-Only generated Markdown files may be created or updated by the agent:
+Only each skill's owned generated Markdown document may be created or updated by the agent, under the target repository's `docs/` directory:
 
 ```text
-overview.md
-recap.md
-backlog.md
+docs/overview.md
+docs/recap.md
+docs/backlog.md
 ```
 
 ---
@@ -240,18 +240,9 @@ Avoid unnecessary abstraction. Only move genuinely shared behavior into this fil
 
 ## Purpose
 
-Explore an unfamiliar project and generate a concise high-level `overview.md` that helps a new junior developer understand:
+Explore an unfamiliar project and generate a concise, evidence-based `docs/overview.md` so a junior developer can understand its purpose, actively used technology, selective structure, verified application workflows, confirmed HTTP endpoints if registered, useful project commands, a safe first reading path, and cautions.
 
-- what the application does
-- architecture
-- important modules
-- application flow
-- important files
-- technology stack
-- development workflow
-- where to start reading
-
-The skill should focus on understanding system flow rather than documenting every file.
+Focus on explaining the system, not enumerating every file. Use `Partial` for workflow or endpoint inventories whose completeness is not evidenced; never invent routes for a client-only repository.
 
 ---
 
@@ -389,78 +380,26 @@ The agent must verify actual flow before documenting it.
 
 ## Output
 
-Create or update:
+Create or update only `docs/overview.md` (and create `docs/` when absent). Use `skills/to-catchup/references/overview-template.md` as the single format authority.
 
-```text
-overview.md
-```
-
-Use the template in:
-
-```text
-references/overview-template.md
-```
-
-Required sections:
+The exact ordered major headings are:
 
 ```md
 # Project Overview
-
-Last updated:
-
-## What This Project Does
-
+## Purpose
 ## Tech Stack
-
-## High-Level Architecture
-
-## Main Application Flow
-
-## Important Modules
-
-## Important Files
-
-## Data Flow
-
-## External Dependencies
-
-## Environment & Configuration
-
-## Development Workflow
-
-## Recommended Reading Order
-
-## Things to Be Careful About
+## Project Tree
+## Workflow
+## API Endpoints
+## Scripts
+## Important Notes
 ```
 
-Keep the content concise.
-
-Prefer:
-
-```text
-request
-→ route
-→ handler
-→ service
-→ repository
-→ database
-```
-
-over exhaustive directory listings.
-
----
+Omit `## API Endpoints` entirely for client-only projects or repositories without registered HTTP routes; explain external API limitations in Important Notes. Put architecture relationships and the first reading path in Project Tree rather than separate major sections. List every verified workflow's name and one-line purpose visibly, with concise vertical trigger-to-outcome diagrams (collapse additional diagrams when needed). Count only distinct confirmed HTTP method and full mounted route-template pairs, including health/internal routes, and state what remains untraced for Partial inventories. List useful evidenced commands and warn before any command that changes data.
 
 ## Validation
 
-`validate-overview.sh` should confirm:
-
-- `overview.md` exists
-- title exists
-- required major sections exist
-- file is not empty
-- obvious secret patterns are not present
-
-Do not attempt to prove architecture correctness with shell.
+`validate-overview.sh` checks the exact ordered heading set with optional endpoint section, obvious secret patterns, and the output fingerprint when present. It cannot prove architecture, coverage, routes, or pre-write ownership; the agent checks source evidence and existing-output ownership before publishing.
 
 ---
 
@@ -471,7 +410,7 @@ Do not attempt to prove architecture correctness with shell.
 Maintain a chronological, append-only history of meaningful project work in:
 
 ```text
-recap.md
+docs/recap.md
 ```
 
 The skill should answer:
@@ -701,7 +640,7 @@ Never overwrite old recap content merely because a new run occurs.
 Create and maintain:
 
 ```text
-backlog.md
+docs/backlog.md
 ```
 
 The file represents meaningful unfinished project work.
@@ -709,8 +648,8 @@ The file represents meaningful unfinished project work.
 Potential sources include:
 
 - current conversation/context
-- `overview.md`
-- `recap.md`
+- `docs/overview.md`
+- `docs/recap.md`
 - code TODO/FIXME comments
 - current Git working tree
 - incomplete implementations
@@ -874,7 +813,7 @@ Example logic:
 
 ```bash
 IDS="$(
-  grep -oE 'BL-[0-9]+' backlog.md |
+  grep -oE 'BL-[0-9]+' docs/backlog.md |
   sort
 )"
 
@@ -903,19 +842,19 @@ Relationship:
 ```text
 to-catchup
     ↓
-overview.md
+docs/overview.md
     ↓
 provides architecture context
 
 to-recap
     ↓
-recap.md
+docs/recap.md
     ↓
 provides development history
 
 to-backlog
     ↓
-backlog.md
+docs/backlog.md
     ↓
 provides unfinished work
 ```
@@ -923,8 +862,8 @@ provides unfinished work
 `to-catchup` may read:
 
 ```text
-recap.md
-backlog.md
+docs/recap.md
+docs/backlog.md
 ```
 
 if they already exist, but they should not be required.
@@ -932,8 +871,8 @@ if they already exist, but they should not be required.
 `to-recap` may read:
 
 ```text
-overview.md
-backlog.md
+docs/overview.md
+docs/backlog.md
 ```
 
 to improve context.
@@ -941,8 +880,8 @@ to improve context.
 `to-backlog` should preferably read:
 
 ```text
-overview.md
-recap.md
+docs/overview.md
+docs/recap.md
 ```
 
 when available.
@@ -986,7 +925,7 @@ Read:
 
 Output:
 
-`overview.md`
+`docs/overview.md`
 
 ## to-recap
 
@@ -999,7 +938,7 @@ Read:
 
 Output:
 
-`recap.md`
+`docs/recap.md`
 
 ## to-backlog
 
@@ -1012,7 +951,7 @@ Read:
 
 Output:
 
-`backlog.md`
+`docs/backlog.md`
 ```
 
 Keep this file concise.
@@ -1205,7 +1144,7 @@ cmd/
 internal/
 ```
 
-When a monorepo is detected, `overview.md` should describe:
+When a monorepo is detected, describe its relevant structure in `docs/overview.md` under `## Project Tree`:
 
 ```text
 repository purpose
@@ -1218,7 +1157,7 @@ relationships between components
 Example:
 
 ```md
-## Workspace Structure
+## Project Tree
 
 ### apps/web
 
@@ -1297,22 +1236,17 @@ Generated files may already exist.
 
 The agent must preserve useful human-written content when reasonable.
 
-## `overview.md`
+## `docs/overview.md`
 
-This file may be refreshed because architecture can evolve.
+This file may be refreshed because architecture can evolve, but existing edits must pass the output fingerprint check (or be a clean, tracked legacy file) before writing. Retain useful project-specific warnings in Important Notes; fit any useful older content into the exact ordered major headings rather than adding incompatible sections.
 
-However:
-
-- do not remove useful sections without reason
-- preserve manually added project-specific warnings where possible
-
-## `recap.md`
+## `docs/recap.md`
 
 Treat historical entries as append-only.
 
 Do not rewrite or reorder previous history unless correcting an obvious structural issue.
 
-## `backlog.md`
+## `docs/backlog.md`
 
 May be updated actively.
 
@@ -1537,9 +1471,9 @@ Explain that these are portable coding-agent skills designed to help junior deve
 Explain:
 
 ```text
-to-catchup → overview.md
-to-recap   → recap.md
-to-backlog → backlog.md
+to-catchup → docs/overview.md
+to-recap   → docs/recap.md
+to-backlog → docs/backlog.md
 ```
 
 ## Installation
@@ -1648,7 +1582,7 @@ Consider complete when:
 - [ ] project scanning works
 - [ ] stack detection works
 - [ ] entrypoint candidate detection works
-- [ ] generated `overview.md` follows template
+- [ ] generated `docs/overview.md` follows the one ordered template, with optional confirmed HTTP endpoints
 - [ ] output focuses on system flow
 - [ ] noisy directories are excluded
 - [ ] validator verifies required structure
@@ -1701,13 +1635,13 @@ fresh repository
     ↓
 run to-catchup
     ↓
-overview.md created
+docs/overview.md created
     ↓
 developer makes several commits
     ↓
 run to-recap
     ↓
-recap.md created with checkpoint
+docs/recap.md created with checkpoint
     ↓
 developer makes more commits
     ↓
@@ -1717,19 +1651,19 @@ only new work appended
     ↓
 run to-backlog
     ↓
-backlog.md created from meaningful remaining work
+docs/backlog.md created from meaningful remaining work
 ```
 
 A future developer should then be able to enter the project and understand:
 
 ```text
-overview.md
+docs/overview.md
 → how the project works
 
-recap.md
+docs/recap.md
 → what happened
 
-backlog.md
+docs/backlog.md
 → what remains
 ```
 
@@ -1749,8 +1683,8 @@ Agent:
 Explores repository
 → runs deterministic helper scripts
 → inspects important source files
-→ creates overview.md
-→ validates overview.md
+→ creates docs/overview.md
+→ validates docs/overview.md
 ```
 
 Then:
@@ -1765,7 +1699,7 @@ Agent:
 Reads recap checkpoint
 → gathers new Git history
 → investigates relevant changes
-→ appends recap.md
+→ appends docs/recap.md
 → records Current Point
 → validates checkpoint
 ```
@@ -1783,7 +1717,7 @@ Reads existing project memory
 → scans unfinished-work candidates
 → inspects repository state
 → determines meaningful remaining work
-→ updates backlog.md
+→ updates docs/backlog.md
 → validates IDs/statuses
 ```
 

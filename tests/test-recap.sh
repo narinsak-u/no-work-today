@@ -32,13 +32,15 @@ initial_repo="$fixture/short history"
 initial_branch="$(git -C "$initial_repo" branch --show-current)"
 initial_head="$(git -C "$initial_repo" rev-parse HEAD)"
 initial_stale_head="$(git -C "$initial_repo" rev-parse HEAD^)"
+initial_oldest="$(git -C "$initial_repo" rev-list --topo-order --max-count=100 "$initial_head" | awk 'END {print}')"
 initial_selected="$fixture/initial-selected"
 git -C "$initial_repo" rev-list --topo-order --reverse "$initial_head" > "$initial_selected"
 initial_inline="$(awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "}' "$initial_selected")"
 cat > "$fixture/initial-unsigned" <<DOC
 # Project Recap
 ## Scope
-- **Committed range:** through $initial_head.
+- **Committed range:** Initial window: \`$initial_oldest\` through \`$initial_head\`, inclusive.
+- **Older history:** None; all reachable commits covered
 ## 2026-10-12 — Initial history
 - **Category:** testing
 - **Status:** Completed
@@ -71,6 +73,72 @@ initial_hash="$( (sha256sum "$fixture/initial-unsigned" 2>/dev/null || shasum -a
 awk -v hash="$initial_hash" '/^-->$/ {print "output_sha256: " hash} {print}' \
   "$fixture/initial-unsigned" > "$fixture/initial-valid-recap"
 bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-valid-recap" "$initial_selected" "$initial_head" INITIAL
+initial_digest="$(git -C "$initial_repo" hash-object "$fixture/initial-valid-recap")"
+bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-valid-recap" "$initial_selected" "$initial_head" INITIAL
+[[ "$(git -C "$initial_repo" hash-object "$fixture/initial-valid-recap")" == "$initial_digest" ]] || exit 1
+
+# A first recap of a long history exposes the inclusive oldest represented
+# commit and explicitly excludes everything older than the selected 100.
+long_selected="$fixture/long-initial-selected"
+git -C "$repo" rev-list --topo-order --max-count=100 "$head" |
+  awk '{ids[++n]=$0} END {for (i=n; i>=1; i--) print ids[i]}' > "$long_selected"
+long_inline="$(awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "}' "$long_selected")"
+cat > "$fixture/long-initial-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Committed range:** Initial window: \`$oldest\` through \`$head\`, inclusive.
+- **Older history:** Outside initial coverage
+## 2026-10-12 — Initial history
+- **Category:** testing
+- **Status:** Completed
+- **What / why:** Captured only the newest 100 commits.
+<details>
+<summary>Technical details and commit evidence</summary>
+- **Important files:** none
+- **Commits:** $long_inline
+- **Verification:** not run
+</details>
+- **Impact:** Initial history captured.
+## Current Point
+- **HEAD:** \`$head\` on \`$branch\`
+- **Recap checkpoint:** \`$head\`
+- **Pending committed history:** None
+- **Committed work:** Only the initial window was captured.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** Inspect older history separately if needed.
+<!-- recap-state
+branch: $branch
+last_commit: $head
+last_updated: 2026-10-12
+history_head: $head
+pending_commits: none
+-->
+DOC
+sign_initial() {
+  local digest
+  digest="$( (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | awk 'NR==1 {print $1}')"
+  awk -v hash="$digest" '/^-->$/ {print "output_sha256: " hash} {print}' "$1" > "$2"
+}
+sign_initial "$fixture/long-initial-unsigned" "$fixture/long-initial-recap"
+bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/long-initial-recap" "$long_selected" "$head" INITIAL
+for case in wrong_boundary wrong_older missing_older; do
+  case "$case" in
+    wrong_boundary) awk -v wrong="$initial" '/^- \*\*Committed range:\*\*/ {sub(/`[0-9a-f]+`/, "`" wrong "`")} {print}' "$fixture/long-initial-unsigned" > "$fixture/initial-tampered" ;;
+    wrong_older) awk '/^- \*\*Older history:\*\*/ {$0="- **Older history:** None; all reachable commits covered"} {print}' "$fixture/long-initial-unsigned" > "$fixture/initial-tampered" ;;
+    missing_older) awk '!/^- \*\*Older history:\*\*/' "$fixture/long-initial-unsigned" > "$fixture/initial-tampered" ;;
+  esac
+  sign_initial "$fixture/initial-tampered" "$fixture/initial-tampered-signed"
+  if bash "$skill/scripts/validate-recap.sh" "$repo" "$fixture/initial-tampered-signed" "$long_selected" "$head" INITIAL >/dev/null 2>&1; then
+    echo "Validator accepted $case in a signed initial recap" >&2; exit 1
+  fi
+done
+awk '/^- \*\*Older history:\*\*/ {$0="- **Older history:** Outside initial coverage"} {print}' \
+  "$fixture/initial-unsigned" > "$fixture/initial-tampered"
+sign_initial "$fixture/initial-tampered" "$fixture/initial-tampered-signed"
+if bash "$skill/scripts/validate-recap.sh" "$initial_repo" "$fixture/initial-tampered-signed" "$initial_selected" "$initial_head" INITIAL >/dev/null 2>&1; then
+  echo 'Validator accepted excluded older history when all commits were covered' >&2; exit 1
+fi
 awk -v stale="$initial_stale_head" '
   /^history_head: / {print "history_head: " stale; next}
   /^output_sha256: / {next}
@@ -540,6 +608,82 @@ if ! bash "$skill/scripts/validate-recap.sh" "$account_repo" "$account_no_notes"
   echo 'Validator rejected a recap without optional Junior notes' >&2; exit 1
 fi
 
+# Resume a queue longer than a single process argument, including commits
+# hidden behind a merge after the checkpoint. Every publication is validated
+# before replacing the source; a bad remainder must leave it untouched.
+git -C "$account_repo" switch -qc recap-side
+git -C "$account_repo" commit --allow-empty -qm 'side one'
+git -C "$account_repo" commit --allow-empty -qm 'side two'
+git -C "$account_repo" switch -q "$account_branch"
+for ((n=1; n<=6600; n++)); do git -C "$account_repo" commit --allow-empty -qm "long queue $n"; done
+git -C "$account_repo" merge -q --no-ff recap-side -m 'join side history'
+long_head="$(git -C "$account_repo" rev-parse HEAD)"
+long_expected="$fixture/long-expected"
+long_actual="$fixture/long-actual"
+git -C "$account_repo" rev-list --topo-order --reverse "$account_base..$long_head" > "$long_expected"
+: > "$long_actual"
+cp "$account_legacy_prior" "$account_prior"
+long_prior="$account_prior"
+long_original="$(git -C "$account_repo" hash-object "$long_prior")"
+long_offset=0
+long_total="$(awk 'END {print NR}' "$long_expected")"
+while (( long_offset < long_total )); do
+  long_selected="$fixture/long-selected"
+  awk -v start="$long_offset" 'NR>start && NR<=start+100' "$long_expected" > "$long_selected"
+  long_count="$(awk 'END {print NR}' "$long_selected")"
+  ((long_count <= 100)) || exit 1
+  long_checkpoint="$(awk 'END {print}' "$long_selected")"
+  long_next="$(awk -v start="$long_offset" 'NR==start+101 {print; exit}' "$long_expected")"
+  long_remaining=$((long_total-long_offset-long_count))
+  long_unsigned="$fixture/long-unsigned"
+  awk '/^## Current Point$/ {exit} {print}' "$long_prior" > "$long_unsigned"
+  {
+    printf '## 2026-10-13 — Continued history\n'
+    printf '%s\n' '- **Category:** testing' '- **Status:** Completed' '- **What / why:** Represent the next bounded history batch.' '<details>' '<summary>Technical details and commit evidence</summary>' '- **Important files:** none'
+    awk '{printf "%s`%s` — selected commit", separator, $0; separator="; "} END {print ""}' "$long_selected" | awk '{print "- **Commits:** " $0}'
+    printf '%s\n' '- **Verification:** not run' '</details>' '- **Impact:** History represented.' '## Current Point'
+    printf '%s\n' "- **HEAD:** \`$long_head\` on \`$account_branch\`" "- **Recap checkpoint:** \`$long_checkpoint\`"
+    if ((long_remaining)); then
+      printf '%s\n' "- **Pending committed history:** $long_remaining commits remain; oldest unrepresented: \`$long_next\`"
+    else
+      printf '%s\n' '- **Pending committed history:** None'
+    fi
+    printf '%s\n' '- **Committed work:** The selected history is represented.' '- **Uncommitted work:** None.' '- **Verification:** not run' '- **Next safe point:** Continue pending work if any.' '<!-- recap-state'
+    printf 'branch: %s\nlast_commit: %s\nlast_updated: 2026-10-13\nhistory_head: %s\npending_commits: ' "$account_branch" "$long_checkpoint" "$long_head"
+    if ((long_remaining)); then
+      awk -v start="$long_offset" 'NR>start+100 {printf "%s%s", separator, $0; separator=" "} END {print ""}' "$long_expected"
+    else
+      printf 'none\n'
+    fi
+    printf '%s\n' '-->'
+  } >> "$long_unsigned"
+  long_hash="$( (sha256sum "$long_unsigned" 2>/dev/null || shasum -a 256 "$long_unsigned") | awk 'NR==1 {print $1}')"
+  long_draft="$fixture/long-draft"
+  awk -v hash="$long_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$long_unsigned" > "$long_draft"
+  if ((long_offset == 0)); then
+    [[ "$(awk '/^pending_commits: / {print length($0)}' "$long_draft")" -gt 262144 ]] ||
+      { echo 'Large queue fixture is shorter than a typical single-argument limit' >&2; exit 1; }
+    awk '/^pending_commits: / {sub(/ [0-9a-f]+$/, ""); print; next} !/^output_sha256: / {print}' "$long_draft" > "$fixture/long-bad-unsigned"
+    bad_hash="$( (sha256sum "$fixture/long-bad-unsigned" 2>/dev/null || shasum -a 256 "$fixture/long-bad-unsigned") | awk 'NR==1 {print $1}')"
+    awk -v hash="$bad_hash" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/long-bad-unsigned" > "$fixture/long-bad-draft"
+    if bash "$skill/scripts/validate-recap.sh" "$account_repo" "$fixture/long-bad-draft" "$long_selected" "$long_head" "$long_prior" >/dev/null 2>&1; then
+      echo 'Validator accepted a truncated large queue' >&2; exit 1
+    fi
+    [[ "$(git -C "$account_repo" hash-object "$long_prior")" == "$long_original" ]] || exit 1
+    [[ "$(awk '/^last_commit: / {print $2}' "$long_prior")" == "$account_base" ]] || exit 1
+  fi
+  bash "$skill/scripts/validate-recap.sh" "$account_repo" "$long_draft" "$long_selected" "$long_head" "$long_prior"
+  cat "$long_selected" >> "$long_actual"
+  cp "$long_draft" "$long_prior"
+  ((long_offset += long_count))
+done
+cmp "$long_expected" "$long_actual"
+[[ "$(awk '/^pending_commits: / {print $2}' "$long_prior")" == none ]] || exit 1
+long_complete="$(git -C "$account_repo" hash-object "$long_prior")"
+: > "$fixture/no-pending-selected"
+bash "$skill/scripts/validate-recap.sh" "$account_repo" "$long_prior" "$fixture/no-pending-selected" "$long_head" "$long_prior"
+[[ "$(git -C "$account_repo" hash-object "$long_prior")" == "$long_complete" ]] || exit 1
+
 # An interrupted draft that accounts for one rather than all 1,007 commits
 # cannot advance the checkpoint or modify the already published recap.
 cp "$expected" "$fixture/incomplete"
@@ -578,9 +722,144 @@ fi
 [[ "$(git -C "$repo" hash-object "$recap")" == "$before" ]] || exit 1
 
 mkdir -p "$fixture/not git" "$fixture/empty"
+mkdir -p "$fixture/agent skills"
+cp -R "$skill" "$fixture/agent skills/to-recap"
+empty_skill="$fixture/agent skills/to-recap"
 git -C "$fixture/empty" init -q
-if bash "$skill/scripts/collect-git-context.sh" "$fixture/not git" >/dev/null 2>&1 || bash "$skill/scripts/collect-git-context.sh" "$fixture/empty" >/dev/null 2>&1; then
-  echo 'Collector accepted absent history' >&2; exit 1
+empty_branch="$(git -C "$fixture/empty" symbolic-ref --quiet --short HEAD)"
+if non_git_error="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/not git" 2>&1)"; then
+  echo 'Collector accepted a non-Git directory' >&2; exit 1
+fi
+[[ "$non_git_error" == *'not a Git worktree'* ]] || exit 1
+empty_context="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty")"
+[[ "$empty_context" == *"mode: empty"* && "$empty_context" == *"branch: $empty_branch"* &&
+   "$empty_context" == *"head: none"* && "$empty_context" == *"total: 0"* &&
+   "$empty_context" != *"commit: "* ]] || { printf 'Unsafe empty context: %s\n' "$empty_context" >&2; exit 1; }
+cat > "$fixture/empty-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Repository / worktree:** An empty Git repository.
+- **Branch:** \`$empty_branch\`
+- **Committed range:** No commits yet; this Git repository has no committed history.
+- **Working-tree inclusion:** Uncommitted files, if any, are not completed commits.
+## Current Point
+- **HEAD:** No commits yet on \`$empty_branch\`
+- **Recap checkpoint:** None (no commits yet)
+- **Pending committed history:** None
+- **Committed work:** None; no commits exist.
+- **Uncommitted work:** None.
+- **Verification:** not run
+- **Next safe point:** Inspect working-tree files, then create the first commit when ready.
+<!-- recap-state
+branch: $empty_branch
+last_commit: none
+last_updated: 2026-10-12
+history_head: none
+pending_commits: none
+-->
+DOC
+sign_empty_candidate() {
+  local digest
+  digest="$( (sha256sum "$fixture/empty-unsigned" 2>/dev/null || shasum -a 256 "$fixture/empty-unsigned") | awk 'NR==1 {print $1}')"
+  awk -v hash="$digest" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/empty-unsigned" > "$fixture/empty-signed"
+}
+sign_empty_candidate
+: > "$fixture/empty-selected"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty-signed" "$fixture/empty-selected" none INITIAL
+mkdir -p "$fixture/empty/docs"
+cp "$fixture/empty-signed" "$fixture/empty/docs/recap.md"
+bash "$empty_skill/scripts/validate-checkpoint.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" none
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" "$fixture/empty-selected" none "$fixture/empty/docs/recap.md"
+cp "$fixture/empty-unsigned" "$fixture/empty-original"
+for bad in \
+  'last_commit: 0000000000000000000000000000000000000000' \
+  'history_head: 0000000000000000000000000000000000000000' \
+  'pending_commits: 0000000000000000000000000000000000000000' \
+  '- **Recap checkpoint:** `0000000000000000000000000000000000000000`'
+do
+  awk -v replacement="$bad" '
+    /^last_commit: none$/ && replacement ~ /^last_commit:/ {print replacement; next}
+    /^history_head: none$/ && replacement ~ /^history_head:/ {print replacement; next}
+    /^pending_commits: none$/ && replacement ~ /^pending_commits:/ {print replacement; next}
+    /^- \*\*Recap checkpoint:\*\*/ && replacement ~ /^- / {print replacement; next}
+    {print}
+  ' "$fixture/empty-original" > "$fixture/empty-unsigned"
+  sign_empty_candidate
+  if bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty-signed" "$fixture/empty-selected" none INITIAL >/dev/null 2>&1; then
+    printf 'Validator accepted fabricated empty-history state: %s\n' "$bad" >&2; exit 1
+  fi
+done
+cp "$fixture/empty-original" "$fixture/empty-unsigned"
+git -C "$fixture/empty" -c user.name=Recap -c user.email=recap@example.test commit --allow-empty -qm first
+if bash "$empty_skill/scripts/validate-checkpoint.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" >/dev/null 2>&1; then
+  echo 'Checkpoint validator treated empty recap as current after a commit' >&2; exit 1
+fi
+first_head="$(git -C "$fixture/empty" rev-parse HEAD)"
+first_context="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty")"
+[[ "$first_context" == *"mode: initial"* && "$first_context" == *"total: 1"* &&
+   "$first_context" == *"commit: $first_head"* ]] || exit 1
+printf '%s\n' "$first_head" > "$fixture/first-selected"
+cat > "$fixture/first-unsigned" <<DOC
+# Project Recap
+## Scope
+- **Repository / worktree:** An empty Git repository.
+- **Branch:** \`$empty_branch\`
+- **Committed range:** Initial window: \`$first_head\` through \`$first_head\`, inclusive.
+- **Older history:** None; all reachable commits covered
+- **Before first commit:** 2026-10-12 on \`$empty_branch\`: no commits existed; earlier uncommitted work: None.
+- **Working-tree inclusion:** Uncommitted files, if any, are not completed commits.
+## 2026-10-12 — First commit
+- **Category:** infrastructure
+- **Status:** Completed
+- **What / why:** The repository now has its first commit.
+<details>
+<summary>Technical details and commit evidence</summary>
+- **Important files:** None; this was an empty commit.
+- **Commits:** \`$first_head\` — first empty commit.
+- **Verification:** not run
+</details>
+- **Impact:** A committed starting point now exists.
+## Current Point
+- **HEAD:** \`$first_head\` on \`$empty_branch\`
+- **Recap checkpoint:** \`$first_head\`
+- **Pending committed history:** None
+- **Committed work:** The first commit is recorded above.
+- **Uncommitted work:** The existing recap remains untracked.
+- **Verification:** not run
+- **Next safe point:** Inspect uncommitted files before the next change.
+<!-- recap-state
+branch: $empty_branch
+last_commit: $first_head
+last_updated: 2026-10-12
+history_head: $first_head
+pending_commits: none
+-->
+DOC
+first_digest="$( (sha256sum "$fixture/first-unsigned" 2>/dev/null || shasum -a 256 "$fixture/first-unsigned") | awk 'NR==1 {print $1}')"
+awk -v hash="$first_digest" '/^-->$/ {print "output_sha256: " hash} {print}' "$fixture/first-unsigned" > "$fixture/first-signed"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/first-signed" "$fixture/first-selected" "$first_head" "$fixture/empty/docs/recap.md"
+cp "$fixture/empty/docs/recap.md" "$fixture/empty-tampered"
+printf 'unexpected change\n' >> "$fixture/empty-tampered"
+if bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/first-signed" "$fixture/first-selected" "$first_head" "$fixture/empty-tampered" >/dev/null 2>&1; then
+  echo 'Transition accepted an edited empty recap as source' >&2; exit 1
+fi
+cp "$fixture/first-signed" "$fixture/empty/docs/recap.md"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md"
+first_before="$(git -C "$fixture/empty" hash-object "$fixture/empty/docs/recap.md")"
+first_noop="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty" "$first_head" 0 "$first_head")"
+[[ "$first_noop" == *"mode: resume"* && "$first_noop" == *"total: 0"* &&
+   "$first_noop" != *"commit: "* ]] || exit 1
+bash "$empty_skill/scripts/validate-checkpoint.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" "$first_head"
+bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md"
+[[ "$(git -C "$fixture/empty" hash-object "$fixture/empty/docs/recap.md")" == "$first_before" ]] || exit 1
+git -C "$fixture/empty" symbolic-ref HEAD refs/heads/unborn
+if orphan_error="$(bash "$empty_skill/scripts/collect-git-context.sh" "$fixture/empty" 2>&1)"; then
+  echo 'Collector treated an unborn branch with existing Git history as an empty repository' >&2; exit 1
+fi
+[[ "$orphan_error" == *'unborn branch with existing or unsafe history'* ]] || exit 1
+if bash "$empty_skill/scripts/validate-recap.sh" "$fixture/empty" "$fixture/empty/docs/recap.md" >/dev/null 2>&1; then
+  echo 'Validator accepted an empty recap for a branch with existing history' >&2; exit 1
 fi
 # A shallow clone cannot establish an initial oldest-history boundary.
 git clone -q --depth 1 "file://$repo" "$fixture/shallow" 2>/dev/null

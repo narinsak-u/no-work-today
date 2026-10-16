@@ -17,3 +17,18 @@ printf 'WORKING_TREE_STATUS (index/worktree codes, at most 80 paths):\n'
 git --no-optional-locks -C "$root" -c core.quotePath=false status --short --untracked-files=normal |
   awk 'NR <= 80 { printf "STATUS=%s %s\n", substr($0, 1, 2), substr($0, 4) }
        END { if (NR > 80) printf "... %d additional changed paths omitted\n", NR - 80 }'
+
+# File lists and diffstat are leads, not evidence of completed work. Avoid
+# external diff drivers and textconv; summarize only metadata, never file contents.
+show_diff() {
+  local label="$1" stage="$2" diff_mode=
+  if [[ "$stage" == staged ]]; then diff_mode=--cached; fi
+  printf '%s_CHANGED_FILES (at most 40 paths):\n' "$label"
+  git --no-optional-locks -C "$root" -c core.quotePath=true diff --no-ext-diff --no-textconv ${diff_mode:+"$diff_mode"} --name-status -- |
+    awk -v stage="$stage" 'NR <= 40 { print "CHANGE=" $0 }
+      END { if (NR > 40) printf "... %d additional %s changed files omitted\n", NR - 40, stage }'
+  printf '%s_DIFF_STAT (at most 40 files; no file contents):\n' "$label"
+  git --no-optional-locks -C "$root" -c core.quotePath=true diff --no-ext-diff --no-textconv ${diff_mode:+"$diff_mode"} --stat --stat-count=40 --stat-width=120 --
+}
+show_diff STAGED staged
+show_diff UNSTAGED unstaged

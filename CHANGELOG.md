@@ -3,12 +3,16 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+- Safely adopt clean tracked legacy recaps by preserving old entries byte-for-byte, validating new entries, and refusing ambiguous or modified history.
+- Kept pending recap queue validation compatible with CRLF documents.
+- Made backlog diff inspection compatible with macOS Bash when no staged or unstaged diff mode is selected.
 - Recorded manual scenarios and exploratory outputs; valid paired comparisons remain unavailable because the runtime exposed skill resources to no-skill controls; trimmed the catchup example to the documented 150-line ceiling.
 - Added a no-skill isolation preflight to prevent contaminated skill comparisons.
 - Clarified that each recap entry keeps selected commit IDs inline on its single **Commits:** field line, based on 100-commit wording micro-tests.
 - Required every recap publication, including caught-up updates, to pin `history_head` to captured `HEAD`; preserved the exact pending queue and rejected partial publications without the required continuation boundary.
 - Distinguished the recap helper directory from the target Git root in skill instructions and validator calls.
 - Clarified recap shell-state and helper-root handling, evidence-backed groups of at most ten commits, single-line commit evidence, fail-closed publication, optional Junior notes, and singular/plural pending-history grammar.
+- Added truthful empty-repository recaps and a validated empty-to-first-commit transition that preserves the prior state; subsequent caught-up runs leave the recap unchanged.
 - Fixed the recap shell regression loop under `set -e` when its remaining-commit counter reaches zero.
 - Reworked catchup overviews around ten evidence-based sections, tightened exact ordered-heading validation, and updated the fictional example and regression coverage.
 - Improved catchup Main Flows with concise vertical diagrams and selective Core Modules trees while preserving the ten-heading and safety contracts.
