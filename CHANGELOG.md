@@ -3,6 +3,7 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+- Made catchup overviews more concise with role-described technologies and complete workflow diagrams and endpoint counts.
 - Safely adopt clean tracked legacy recaps by preserving old entries byte-for-byte, validating new entries, and refusing ambiguous or modified history.
 - Kept pending recap queue validation compatible with CRLF documents.
 - Made backlog diff inspection compatible with macOS Bash when no staged or unstaged diff mode is selected.
