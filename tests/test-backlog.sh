@@ -459,6 +459,42 @@ invalid 's|Payment capture failure in src/payments.go.|Connect to https://servic
 invalid 's|Payment capture failure in src/payments.go.|client_secret=[REDACTED] and OAUTH_CLIENT_SECRET="<redacted>"|' 'safe client secret placeholders' accept
 invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer backlogged-secret-credential|' 'Bearer authorization credential'
 invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer [REDACTED]|' 'redacted Bearer authorization credential' accept
+# GitHub issue collection uses an offline gh stub and publishes only complete
+# results from a successful paginated API request.
+collector="$skill/scripts/list-open-issues.sh"
+gh_stub="$fixture/gh-bin"
+mkdir -p "$gh_stub"
+cat > "$gh_stub/gh" <<'GH'
+#!/usr/bin/env bash
+printf '%s\n' "$PWD" > "$GH_CALL_DIR"
+printf '%s\n' "$@" > "$GH_CALL_ARGS"
+case "${GH_MODE:-success}" in
+  partial)
+    printf '%s\n' '{"number":99,"title":"Partial page","body":null,"labels":[],"url":"https://github.com/example/project/issues/99}'
+    exit 1
+    ;;
+  repo-error) printf 'not a GitHub repository\n' >&2; exit 1 ;;
+  auth-error) printf 'authentication required\n' >&2; exit 1 ;;
+esac
+printf '%s' "$GH_FIXTURE"
+GH
+chmod +x "$gh_stub/gh"
+issue_fixture='{"number":12,"title":"Improve retry behavior","body":"Retry transient failures","labels":["bug","wontfix"],"url":"https://github.com/example/project/issues/12}
+{"number":13,"title":"Document recovery","body":null,"labels":[],"url":"https://github.com/example/project/issues/13}'
+GH_CALL_DIR="$fixture/gh-cwd" GH_CALL_ARGS="$fixture/gh-args" GH_FIXTURE="$issue_fixture" PATH="$gh_stub:$PATH" \
+  bash "$collector" "$root" > "$fixture/issues.out" 2> "$fixture/issues.err"
+[[ "$(cat "$fixture/gh-cwd")" == "$(cd "$root" && pwd -P)" ]] || exit 1
+args="$(cat "$fixture/gh-args")"
+[[ "$args" == *'--paginate'* && "$args" == *'state=open&per_page=100'* && "$args" == *'pull_request == null'* ]] || exit 1
+[[ "$(cat "$fixture/issues.out")" == "$issue_fixture" ]] || exit 1
+for mode in partial repo-error auth-error; do
+  if GH_CALL_DIR="$fixture/gh-cwd" GH_CALL_ARGS="$fixture/gh-args" GH_FIXTURE= GH_MODE="$mode" PATH="$gh_stub:$PATH" \
+    bash "$collector" "$root" > "$fixture/issues.out" 2> "$fixture/issues.err"; then exit 1; fi
+  [[ ! -s "$fixture/issues.out" ]] || exit 1
+done
+if GH_CALL_DIR="$fixture/gh-cwd" GH_CALL_ARGS="$fixture/gh-args" GH_FIXTURE= PATH="$fixture/no-gh" \
+  bash "$collector" "$root" > "$fixture/issues.out" 2> "$fixture/issues.err"; then exit 1; fi
+[[ ! -s "$fixture/issues.out" ]] || exit 1
 cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 printf 'Backlog shell scenarios passed.\n'
