@@ -29,3 +29,10 @@ _Avoid_: flow (when referring to a documented application workflow)
 **API endpoint**:
 One explicitly registered HTTP method and full mounted route template; each distinct method-and-path pair counts as a separate endpoint, including different methods on the same path.
 _Avoid_: URL (when counting endpoints; a URL alone omits the method)
+## Backlog
+
+**Backlog item**:
+A concise record of one concrete unfinished outcome that another developer can pick up, supported by one or more work sources.
+
+**Work source**:
+A repository artifact, GitHub issue, or direct user request that provides evidence of unfinished work; it supports a backlog item but does not replace the backlog as the project's source of truth.
