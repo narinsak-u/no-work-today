@@ -498,7 +498,8 @@ if GH_CALL_DIR="$fixture/gh-cwd" GH_CALL_ARGS="$fixture/gh-args" GH_FIXTURE= PAT
 # The local-plan finder reports only unfinished Markdown in the designated
 # plan/spec/issue locations, without exposing document contents.
 plan_root="$fixture/plan root"
-mkdir -p "$plan_root/docs/plans" "$plan_root/docs/specs" "$plan_root/docs/adr" \
+mkdir -p "$plan_root/docs/plans" "$plan_root/docs/specs" \
+  "$plan_root/docs/features/plans" "$plan_root/docs/archive/specs" "$plan_root/docs/adr" \
   "$plan_root/examples" "$plan_root/.scratch/feature/issues"
 printf '# Unchecked\n- [ ] finish the work\n' > "$plan_root/docs/plans/unchecked plan.md"
 printf 'Status: Todo\n' > "$plan_root/docs/plans/todo.md"
@@ -511,12 +512,13 @@ printf 'Status: Done\n- [ ] reconcile status\n' > "$plan_root/.scratch/feature/i
 printf 'Status: done\n' > "$plan_root/docs/plans/lowercase-done.md"
 printf 'Status: Closed\n' > "$plan_root/docs/plans/closed.md"
 printf 'Status: Resolved\n' > "$plan_root/docs/specs/resolved.md"
-printf '%s\n' '- [ ] unrelated' 'Status: Todo' > "$plan_root/docs/adr/ignored.md"
+printf '%s\n' '- [ ] nested plan task' > "$plan_root/docs/features/plans/nested.md"
+printf '%s\n' '- [ ] nested spec task' > "$plan_root/docs/archive/specs/nested.md"
 printf 'Status: Todo\n' > "$plan_root/examples/ignored.md"
 cp "$plan_root/docs/plans/unchecked plan.md" "$fixture/plan-before"
 finder="$skill/scripts/find-open-plans.sh"
 plans="$(bash "$finder" "$plan_root")"
-expected=$'PLAN_FILE=.scratch/feature/issues/blocked.md\nPLAN_FILE=.scratch/feature/issues/conflict.md\nPLAN_FILE=docs/plans/closed.md\nPLAN_FILE=docs/plans/lowercase-done.md\nPLAN_FILE=docs/plans/todo.md\nPLAN_FILE=docs/plans/unchecked\\ plan.md\nPLAN_FILE=docs/plans/unknown.md\nPLAN_FILE=docs/specs/progress.md\nPLAN_FILE=docs/specs/resolved.md\nPLAN_FILE=docs/specs/review.md'
+expected=$'PLAN_FILE=.scratch/feature/issues/blocked.md\nPLAN_FILE=.scratch/feature/issues/conflict.md\nPLAN_FILE=docs/archive/specs/nested.md\nPLAN_FILE=docs/features/plans/nested.md\nPLAN_FILE=docs/plans/closed.md\nPLAN_FILE=docs/plans/lowercase-done.md\nPLAN_FILE=docs/plans/todo.md\nPLAN_FILE=docs/plans/unchecked\\ plan.md\nPLAN_FILE=docs/plans/unknown.md\nPLAN_FILE=docs/specs/progress.md\nPLAN_FILE=docs/specs/resolved.md\nPLAN_FILE=docs/specs/review.md'
 [[ "$plans" == "$expected" ]] || { printf 'unexpected plan list:\n%s\n' "$plans" >&2; exit 1; }
 [[ "$plans" != *'completed.md'* && "$plans" != *'docs/adr/'* && "$plans" != *'examples/'* ]] || exit 1
 [[ "$plans" != *'Waiting on owner'* && "$plans" != *'finish the work'* ]] || exit 1

@@ -40,8 +40,10 @@ scan_root() {
     done
 }
 
-scan_root "$root/docs/plans"
-scan_root "$root/docs/specs"
+if [[ -d "$root/docs" ]]; then
+  find "$root/docs" -type d \( -name plans -o -name specs \) -print0 |
+    while IFS= read -r -d '' directory; do scan_root "$directory"; done
+fi
 if [[ -d "$root/.scratch" ]]; then
   find "$root/.scratch" -type d -name issues -print0 |
     while IFS= read -r -d '' directory; do scan_root "$directory"; done
