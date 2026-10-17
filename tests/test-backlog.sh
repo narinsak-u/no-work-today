@@ -508,6 +508,7 @@ printf 'Status: Needs Review\n' > "$plan_root/docs/specs/review.md"
 printf 'Status: Waiting on owner\n' > "$plan_root/docs/plans/unknown.md"
 printf 'Status: Done\n- [x] finished\n' > "$plan_root/docs/plans/completed.md"
 printf 'Status: Done\n- [ ] reconcile status\n' > "$plan_root/.scratch/feature/issues/conflict.md"
+printf 'Status: done\n' > "$plan_root/docs/plans/lowercase-done.md"
 printf 'Status: Closed\n' > "$plan_root/docs/plans/closed.md"
 printf 'Status: Resolved\n' > "$plan_root/docs/specs/resolved.md"
 printf '%s\n' '- [ ] unrelated' 'Status: Todo' > "$plan_root/docs/adr/ignored.md"
@@ -515,7 +516,7 @@ printf 'Status: Todo\n' > "$plan_root/examples/ignored.md"
 cp "$plan_root/docs/plans/unchecked plan.md" "$fixture/plan-before"
 finder="$skill/scripts/find-open-plans.sh"
 plans="$(bash "$finder" "$plan_root")"
-expected=$'PLAN_FILE=.scratch/feature/issues/blocked.md\nPLAN_FILE=.scratch/feature/issues/conflict.md\nPLAN_FILE=docs/plans/closed.md\nPLAN_FILE=docs/plans/todo.md\nPLAN_FILE=docs/plans/unchecked\\ plan.md\nPLAN_FILE=docs/plans/unknown.md\nPLAN_FILE=docs/specs/progress.md\nPLAN_FILE=docs/specs/resolved.md\nPLAN_FILE=docs/specs/review.md'
+expected=$'PLAN_FILE=.scratch/feature/issues/blocked.md\nPLAN_FILE=.scratch/feature/issues/conflict.md\nPLAN_FILE=docs/plans/closed.md\nPLAN_FILE=docs/plans/lowercase-done.md\nPLAN_FILE=docs/plans/todo.md\nPLAN_FILE=docs/plans/unchecked\\ plan.md\nPLAN_FILE=docs/plans/unknown.md\nPLAN_FILE=docs/specs/progress.md\nPLAN_FILE=docs/specs/resolved.md\nPLAN_FILE=docs/specs/review.md'
 [[ "$plans" == "$expected" ]] || { printf 'unexpected plan list:\n%s\n' "$plans" >&2; exit 1; }
 [[ "$plans" != *'completed.md'* && "$plans" != *'docs/adr/'* && "$plans" != *'examples/'* ]] || exit 1
 [[ "$plans" != *'Waiting on owner'* && "$plans" != *'finish the work'* ]] || exit 1

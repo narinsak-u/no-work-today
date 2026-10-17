@@ -23,7 +23,7 @@ scan_root() {
       if grep -Eq '^[[:space:]]*(-|\*)[[:space:]]+\[[[:space:]]\]' "$file"; then
         unchecked=1
       fi
-      if grep -Eiq '^[[:space:]]*Status:[[:space:]]*Done[[:space:]]*$' "$file"; then
+      if grep -Eq '^[[:space:]]*Status:[[:space:]]*Done[[:space:]]*$' "$file"; then
         done_status=1
       fi
       if (( unchecked )); then
