@@ -459,6 +459,77 @@ invalid 's|Payment capture failure in src/payments.go.|Connect to https://servic
 invalid 's|Payment capture failure in src/payments.go.|client_secret=[REDACTED] and OAUTH_CLIENT_SECRET="<redacted>"|' 'safe client secret placeholders' accept
 invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer backlogged-secret-credential|' 'Bearer authorization credential'
 invalid 's|Payment capture failure in src/payments.go.|Authorization: Bearer [REDACTED]|' 'redacted Bearer authorization credential' accept
+# GitHub issue collection uses an offline gh stub and publishes only complete
+# results from a successful paginated API request.
+collector="$skill/scripts/list-open-issues.sh"
+gh_stub="$fixture/gh-bin"
+mkdir -p "$gh_stub"
+cat > "$gh_stub/gh" <<'GH'
+#!/usr/bin/env bash
+printf '%s\n' "$PWD" > "$GH_CALL_DIR"
+printf '%s\n' "$@" > "$GH_CALL_ARGS"
+case "${GH_MODE:-success}" in
+  partial)
+    printf '%s\n' '{"number":99,"title":"Partial page","body":null,"labels":[],"url":"https://github.com/example/project/issues/99}'
+    exit 1
+    ;;
+  repo-error) printf 'not a GitHub repository\n' >&2; exit 1 ;;
+  auth-error) printf 'authentication required\n' >&2; exit 1 ;;
+esac
+printf '%s' "${GH_PAGE_ONE:-${GH_FIXTURE:-}}"
+if [[ " $* " == *' --paginate '* ]]; then
+  printf '%s' "${GH_PAGE_TWO:-}"
+fi
+GH
+chmod +x "$gh_stub/gh"
+issue_page_one='{"number":12,"title":"Improve retry behavior","body":"Retry transient failures","labels":["bug","wontfix"],"url":"https://github.com/example/project/issues/12}'
+issue_page_two='{"number":13,"title":"Document recovery","body":null,"labels":[],"url":"https://github.com/example/project/issues/13}'
+issue_fixture="$issue_page_one"$'\n'"$issue_page_two"
+GH_CALL_DIR="$fixture/gh-cwd" GH_CALL_ARGS="$fixture/gh-args" GH_PAGE_ONE="$issue_page_one"$'\n' GH_PAGE_TWO="$issue_page_two" PATH="$gh_stub:$PATH" \
+  bash "$collector" "$root" > "$fixture/issues.out" 2> "$fixture/issues.err"
+[[ "$(cat "$fixture/gh-cwd")" == "$(cd "$root" && pwd -P)" ]] || exit 1
+args="$(cat "$fixture/gh-args")"
+[[ "$args" == *'--paginate'* && "$args" == *'state=open&per_page=100'* && "$args" == *'pull_request == null'* ]] || exit 1
+[[ "$(cat "$fixture/issues.out")" == "$issue_fixture" ]] || exit 1
+for mode in partial repo-error auth-error; do
+  if GH_CALL_DIR="$fixture/gh-cwd" GH_CALL_ARGS="$fixture/gh-args" GH_FIXTURE= GH_MODE="$mode" PATH="$gh_stub:$PATH" \
+    bash "$collector" "$root" > "$fixture/issues.out" 2> "$fixture/issues.err"; then exit 1; fi
+  [[ ! -s "$fixture/issues.out" ]] || exit 1
+done
+if GH_CALL_DIR="$fixture/gh-cwd" GH_CALL_ARGS="$fixture/gh-args" GH_FIXTURE= PATH="$fixture/no-gh" \
+  bash "$collector" "$root" > "$fixture/issues.out" 2> "$fixture/issues.err"; then exit 1; fi
+[[ ! -s "$fixture/issues.out" ]] || exit 1
+# The local-plan finder reports only unfinished Markdown in the designated
+# plan/spec/issue locations, without exposing document contents.
+plan_root="$fixture/plan root"
+mkdir -p "$plan_root/docs/plans" "$plan_root/docs/specs" \
+  "$plan_root/docs/features/plans" "$plan_root/docs/archive/specs" \
+  "$plan_root/docs/plans/archive/specs" "$plan_root/docs/adr" \
+  "$plan_root/examples" "$plan_root/.scratch/feature/issues"
+printf '# Unchecked\n- [ ] finish the work\n' > "$plan_root/docs/plans/unchecked plan.md"
+printf 'Status: Todo\n' > "$plan_root/docs/plans/todo.md"
+printf 'Status: In Progress\n' > "$plan_root/docs/specs/progress.md"
+printf 'Status: Blocked\n' > "$plan_root/.scratch/feature/issues/blocked.md"
+printf 'Status: Needs Review\n' > "$plan_root/docs/specs/review.md"
+printf 'Status: Waiting on owner\n' > "$plan_root/docs/plans/unknown.md"
+printf 'Status: Done\n- [x] finished\n' > "$plan_root/docs/plans/completed.md"
+printf 'Status: Done\n- [ ] reconcile status\n' > "$plan_root/.scratch/feature/issues/conflict.md"
+printf 'Status: done\n' > "$plan_root/docs/plans/lowercase-done.md"
+printf 'Status: Closed\n' > "$plan_root/docs/plans/closed.md"
+printf 'Status: Resolved\n' > "$plan_root/docs/specs/resolved.md"
+printf '%s\n' '- [ ] nested plan task' > "$plan_root/docs/features/plans/nested.md"
+printf '%s\n' '- [ ] nested spec task' > "$plan_root/docs/archive/specs/nested.md"
+printf '%s\n' '- [ ] nested overlapping plan/spec task' > "$plan_root/docs/plans/archive/specs/overlap.md"
+printf 'Status: Todo\n' > "$plan_root/examples/ignored.md"
+cp "$plan_root/docs/plans/unchecked plan.md" "$fixture/plan-before"
+finder="$skill/scripts/find-open-plans.sh"
+plans="$(bash "$finder" "$plan_root")"
+expected=$'PLAN_FILE=.scratch/feature/issues/blocked.md\nPLAN_FILE=.scratch/feature/issues/conflict.md\nPLAN_FILE=docs/archive/specs/nested.md\nPLAN_FILE=docs/features/plans/nested.md\nPLAN_FILE=docs/plans/archive/specs/overlap.md\nPLAN_FILE=docs/plans/closed.md\nPLAN_FILE=docs/plans/lowercase-done.md\nPLAN_FILE=docs/plans/todo.md\nPLAN_FILE=docs/plans/unchecked\\ plan.md\nPLAN_FILE=docs/plans/unknown.md\nPLAN_FILE=docs/specs/progress.md\nPLAN_FILE=docs/specs/resolved.md\nPLAN_FILE=docs/specs/review.md'
+[[ "$plans" == "$expected" ]] || { printf 'unexpected plan list:\n%s\n' "$plans" >&2; exit 1; }
+[[ "$(printf '%s\n' "$plans" | grep -Fxc 'PLAN_FILE=docs/plans/archive/specs/overlap.md')" -eq 1 ]] || exit 1
+[[ "$plans" != *'completed.md'* && "$plans" != *'docs/adr/'* && "$plans" != *'examples/'* ]] || exit 1
+[[ "$plans" != *'Waiting on owner'* && "$plans" != *'finish the work'* ]] || exit 1
+cmp -s "$fixture/plan-before" "$plan_root/docs/plans/unchecked plan.md"
 cp "$fixture/valid.md" "$root/docs/backlog.md"
 bash "$skill/scripts/validate-backlog.sh" "$root/docs/backlog.md"
 printf 'Backlog shell scenarios passed.\n'

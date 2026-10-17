@@ -3,6 +3,8 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+- Reconcile open GitHub issues and unfinished local plan/spec work into the backlog, with optional GitHub coverage.
+- Avoid duplicate backlog candidates when nested plan/spec folders overlap, and cover multi-page GitHub issue output in offline tests.
 - Reduced redundant recap Git work by reusing one bounded initial history listing and one changed-file name/status diff for totals and pages.
 - Skip files over the TODO scanner's 512 KiB limit during traversal, avoiding per-file `wc` launches while preserving bounded, redacted scan output.
 - Disabled repository-configured fsmonitor commands throughout working-tree inspection and legacy recap ownership validation.
