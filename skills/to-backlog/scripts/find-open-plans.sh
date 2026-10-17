@@ -48,5 +48,5 @@ if [[ -d "$root/.scratch" ]]; then
   find "$root/.scratch" -type d -name issues -print0 |
     while IFS= read -r -d '' directory; do scan_root "$directory"; done
 fi
-LC_ALL=C sort -o "$result" "$result"
+LC_ALL=C sort -u -o "$result" "$result"
 cat "$result"
