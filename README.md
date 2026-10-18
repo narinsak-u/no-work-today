@@ -89,7 +89,7 @@ They demonstrate the output shapes without claiming to describe a real repositor
 
 ## Versioning 🏷️
 
-This repository uses semantic versioning for documented distribution releases. The current release is **0.1.0**, recorded in [`CHANGELOG.md`](CHANGELOG.md).
+This repository uses semantic versioning for documented distribution releases. The current release is **0.2.0**, recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
 Install from a tagged repository release to pin a version. Installing from the default branch follows the latest documentation.
 

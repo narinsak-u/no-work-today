@@ -3,6 +3,9 @@
 All notable changes to this repository are documented here. Releases follow semantic versioning.
 
 ## [Unreleased]
+
+## [0.2.0] — 2026-10-18
+
 - Reconcile open GitHub issues and unfinished local plan/spec work into the backlog, with optional GitHub coverage.
 - Avoid duplicate backlog candidates when nested plan/spec folders overlap, and cover multi-page GitHub issue output in offline tests.
 - Clarified backlog fingerprinting: hash with the entire `output_sha256` field blanked while preserving its line ending, and report this contract on mismatch.
