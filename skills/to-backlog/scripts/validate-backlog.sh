@@ -101,8 +101,8 @@ LC_ALL=C awk '
   }
 ' "$file" >/dev/null || exit 1
 
-# Remove only the fingerprint VALUE line contents, preserving its line ending
-# (including CRLF), every other byte, and the surrounding comment delimiters.
+# Blank the entire fingerprint field text, including its key, while preserving
+# its LF/CRLF line ending, every other byte, and the surrounding comment.
 expected="$(LC_ALL=C awk '/^output_sha256: / { sub(/\r$/, ""); print substr($0, 16) }' "$file")"
 if command -v sha256sum >/dev/null 2>&1; then
   actual="$(LC_ALL=C sed '/^output_sha256: /s/^output_sha256: [0-9a-f]\{64\}//' "$file" | sha256sum)"
@@ -117,7 +117,7 @@ else
   printf 'Backlog: SHA-256 utility unavailable (sha256sum, shasum, or openssl required)\n' >&2
   exit 1
 fi
-[[ "$actual" == "$expected" ]] || { printf 'Backlog fingerprint mismatch: %s\n' "$file" >&2; exit 1; }
+[[ "$actual" == "$expected" ]] || { printf 'Backlog fingerprint mismatch: %s (hash with the full output_sha256 field blanked; preserve its line ending)\n' "$file" >&2; exit 1; }
 if grep -Eiq -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|(sk_live_|ghp_|github_pat_)[A-Za-z0-9_-]{8,}' "$file"; then
   printf 'Backlog contains a possible secret; remove its value before sharing\n' >&2
   exit 1

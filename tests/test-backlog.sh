@@ -286,6 +286,20 @@ reject() {
     exit 1
   fi
 }
+# Hashing with the key prefix retained must fail with an actionable diagnosis.
+if command -v sha256sum >/dev/null 2>&1; then
+  retained_prefix_hash="$(sed '/^output_sha256: /s/[0-9a-f]\{64\}//' "$fixture/valid.md" | sha256sum)"
+else
+  retained_prefix_hash="$(sed '/^output_sha256: /s/[0-9a-f]\{64\}//' "$fixture/valid.md" | shasum -a 256)"
+fi
+retained_prefix_hash="${retained_prefix_hash%% *}"
+sed "s/^output_sha256: .*/output_sha256: $retained_prefix_hash/" "$fixture/valid.md" > "$root/docs/backlog.md"
+reject 'fingerprint calculated with the output_sha256 prefix retained'
+if ! grep -Fq 'full output_sha256 field blanked; preserve its line ending' "$fixture/validation.stderr"; then
+  printf 'Backlog validator omitted fingerprint normalization guidance:\n' >&2
+  cat "$fixture/validation.stderr" >&2
+  exit 1
+fi
 # Editing any item without updating its fingerprint must be rejected.
 sed 's/Released audit trail/Removed completed record/' "$fixture/valid.md" > "$root/docs/backlog.md"
 reject 'a modified completion record/fingerprint'
