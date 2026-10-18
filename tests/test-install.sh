@@ -30,6 +30,18 @@ backlog="$fixture/agent-to-backlog/to-backlog"
 [[ "$(bash "$catchup/scripts/find-entrypoints.sh" "$project")" == *'apps/web/src/main.ts'* ]] || exit 1
 [[ "$(bash "$recap/scripts/collect-git-context.sh" "$project")" == *'total: 1'* ]] || exit 1
 [[ "$(bash "$backlog/scripts/find-todos.sh" "$project")" == *'services/api/handler.go:1:'* ]] || exit 1
+mkdir -p "$project/docs/plans" "$fixture/fake-bin"
+printf '%s\n' '- [ ] Keep the fixture plan discoverable' > "$project/docs/plans/local plan.md"
+cat > "$fixture/fake-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' '{"number":7,"title":"Fixture issue","body":"Fixture body","labels":[],"url":"https://example.test/issues/7"}'
+EOF
+chmod +x "$fixture/fake-bin/gh"
+issue_output="$(PATH="$fixture/fake-bin:$PATH" bash "$backlog/scripts/list-open-issues.sh" "$project")"
+[[ "$issue_output" == *'"number":7'* && "$issue_output" == *'https://example.test/issues/7'* ]] || exit 1
+plan_output="$(bash "$backlog/scripts/find-open-plans.sh" "$project")"
+[[ "$plan_output" == *'PLAN_FILE=docs/plans/local\ plan.md'* ]] || exit 1
 cp "$source_root/examples/overview.md" "$project/docs/overview.md"
 bash "$catchup/scripts/validate-overview.sh" "$project/docs/overview.md"
 rm "$project/docs/overview.md"

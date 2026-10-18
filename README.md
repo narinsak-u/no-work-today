@@ -61,11 +61,11 @@ Run a skill from the root of the target project and ask your agent to use it. Ea
 
 Existing unrelated files in `docs/` are preserved. Install only the skill that matches your workflow, or install all three for complementary project memory.
 
-The agent runs each installed skill's read-only shell helpers to gather bounded facts, interprets the relevant source and history, writes only that skill's owned Markdown file, then runs its validator. The helpers do **not** generate architectural conclusions, recap prose, or backlog priorities. An existing document's fingerprint and Git state control whether it can be updated safely; if ownership or history is ambiguous, the skill stops instead of overwriting it. Each skill may use the other documents as optional read-only context.
+The agent runs each installed skill's read-only shell helpers to gather bounded facts, interprets the relevant source and history, writes only that skill's owned Markdown file, then runs its validator. The helpers do not generate architectural conclusions, recap prose, or backlog priorities. The authenticated GitHub CLI (`gh`) is optional and enables only GitHub issue intake for `to-backlog`; without it, the skill continues local plan/spec and TODO discovery and reports incomplete GitHub coverage. An existing document's fingerprint and Git state control whether it can be updated safely; if ownership or history is ambiguous, the skill stops instead of overwriting it. Each skill may use the other documents as optional read-only context.
 
 ### Requirements and verification
 
-- Bash, Git, and standard Unix utilities (`find`, `grep`, `sed`, `awk`); a SHA-256 utility (`sha256sum` or `shasum`) is required for document fingerprints. `rg`, `jq`, and `fd` are optional, not required.
+- Bash, Git, and standard Unix utilities (`find`, `grep`, `sed`, `awk`); a SHA-256 utility (`sha256sum` or `shasum`) is required for document fingerprints. `rg`, `jq`, and `fd` are optional, not required. `gh` is optional and only needed for GitHub issue intake by `to-backlog`.
 - Designed for Linux, macOS, WSL, and common coding-agent containers. Native Windows shells are not supported.
 - Run the offline shell integration suite from this repository's root: `bash tests/test-scripts.sh`. It exercises standalone skill installation and temporary Git fixtures, including a recap range larger than 1,000 commits. Script tests check observable facts and document structure; they cannot prove an agent's explanation of an application's architecture.
 
